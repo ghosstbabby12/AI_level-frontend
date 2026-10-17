@@ -1,0 +1,9 @@
+[build]
+  publish = "."
+
+# Reenvía la API al backend: el navegador ve un solo dominio y la cookie de sesión funciona.
+[[redirects]]
+  from = "/api/*"
+  to = "https://artificial-levels.onrender.com/api/:splat"
+  status = 200
+  force = true
