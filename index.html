@@ -166,6 +166,18 @@
     #image { max-width: 100%; height: auto; display: block; }
     #ascii { font-size: 14px; line-height: 1.1; white-space: pre; margin: 0; }
 
+    /* Carga inicial */
+    .boot { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 18vh 0; }
+    .boot p { margin: 0; font-weight: 600; }
+    .boot .boot-detail { max-width: 420px; color: var(--muted); font-weight: 400; font-size: 15px; }
+    .spinner {
+      width: 36px; height: 36px; margin-bottom: 10px; border-radius: 50%;
+      border: 3px solid var(--surface-2); border-top-color: var(--accent);
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
     @media (max-width: 800px) {
       .auth { grid-template-columns: 1fr; gap: 28px; min-height: 0; }
       .steps { grid-template-columns: 1fr; }
@@ -205,6 +217,16 @@
 
   <main>
     <!-- Acceso -->
+    <!-- Carga inicial: visible mientras se consulta la sesion -->
+    <section class="boot" id="boot-view" role="status" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="boot-title">Cargando…</p>
+      <p class="boot-detail" id="boot-detail" hidden>
+        El servidor se está despertando: en el plan gratuito se duerme tras un rato sin visitas.
+        Puede tardar hasta un minuto, solo la primera vez.
+      </p>
+    </section>
+
     <section class="auth" id="auth-view" hidden>
       <div class="pitch">
         <h1>Describe un nivel.<br />Juégalo al instante.</h1>

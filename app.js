@@ -45,6 +45,7 @@
   document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => setAuthMode(b.dataset.mode)));
 
   function showAuth() {
+    $("boot-view").hidden = true;
     $("app-view").hidden = true;
     $("user-menu").hidden = true;
     $("auth-view").hidden = false;
@@ -52,6 +53,7 @@
   }
 
   function showApp(user) {
+    $("boot-view").hidden = true;
     $("auth-view").hidden = true;
     $("app-view").hidden = false;
     $("user-menu").hidden = false;
@@ -180,8 +182,31 @@
 
   /* ---------- Arranque ---------- */
 
-  fetch("/api/auth/me")
-    .then((res) => (res.ok ? res.json() : null))
-    .then((data) => (data ? showApp(data.user) : showAuth()))
-    .catch(showAuth);
+  // El backend gratuito se duerme: mientras despierta, el proxy puede responder 5xx o cortar la conexion.
+  // Se reintenta hasta ~90 s y, si tarda, se explica por que.
+  const BOOT_DEADLINE = Date.now() + 90_000;
+  const slowTimer = setTimeout(() => {
+    $("boot-title").textContent = "Conectando con el servidor…";
+    $("boot-detail").hidden = false;
+  }, 2500);
+
+  async function boot() {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (res.status < 500) {
+        clearTimeout(slowTimer);
+        const data = res.ok ? await res.json() : null;
+        return data ? showApp(data.user) : showAuth();
+      }
+    } catch (_) {
+      // red caida o conexion cortada: se reintenta
+    }
+    if (Date.now() < BOOT_DEADLINE) return setTimeout(boot, 3000);
+    clearTimeout(slowTimer);
+    document.querySelector("#boot-view .spinner").hidden = true;
+    $("boot-title").textContent = "No pudimos conectar con el servidor.";
+    $("boot-detail").textContent = "Revisa tu conexión y recarga la página en un momento.";
+    $("boot-detail").hidden = false;
+  }
+  boot();
 })();
