@@ -33,7 +33,75 @@
       rows: [".gggg...", ".ggggg..", ".gggg...", ".p......", ".p......", ".p......", ".p......", "ppp....."],
       colors: { g: "#2ecc40", p: "#eeeeee" },
     },
+
+    // ---- Objetos (level.kinds.item) ----
+    gem: {
+      rows: ["..cccc..", ".cwccdc.", "cwcccddc", "cccccddc", ".cccddc.", "..cddc..", "...dc...", "........"],
+      colors: { c: "#38bdf8", w: "#e0f7ff", d: "#0369a1" },
+    },
+    key: {
+      rows: ["........", ".yyy....", "y.w.y...", "y...yyyy", "y...y.y.", ".yyy..y.", "........", "........"],
+      colors: { y: "#f5c518", w: "#fff3b0" },
+    },
+    weapon: {
+      rows: ["......ll", ".....lwl", "....lwl.", "...lwl..", "g.lwl...", ".gg.....", ".hgg....", "h...g..."],
+      colors: { l: "#94a3b8", w: "#f1f5f9", g: "#eab308", h: "#7c4a1e" },
+    },
+    potion: {
+      rows: ["...cc...", "...gg...", "..g..g..", ".grrrrg.", ".rwrrrr.", ".rrrrrr.", "..rrrr..", "........"],
+      colors: { c: "#8b5a2b", g: "#cfe8ff", r: "#e0245e", w: "#ffd1e0" },
+    },
+    star: {
+      rows: ["...yy...", "...yy...", "yyyyyyyy", ".yywyyy.", "..yyyy..", ".yy..yy.", "yy....yy", "........"],
+      colors: { y: "#facc15", w: "#fef9c3" },
+    },
+    fruit: {
+      rows: ["....g...", "...g....", ".rrrrrr.", "rwrrrrrr", "rrrrrrrr", "rrrrrrrr", ".rrrrrr.", "..rr.rr."],
+      colors: { g: "#16a34a", r: "#dc2626", w: "#fecaca" },
+    },
+
+    // ---- Enemigos (level.kinds.enemy; "blob" usa el sprite "enemy") ----
+    slime: {
+      rows: ["........", "........", "..gggg..", ".gggggg.", "gwkggwkg", "gggggggg", "gggggggg", ".gddddg."],
+      colors: { g: "#4ade80", d: "#16a34a", w: "#ffffff", k: "#111111" },
+    },
+    ghost: {
+      rows: ["..wwww..", ".wwwwww.", "wwkwwkww", "wwkwwkww", "wwwwwwww", "wwwoowww", "wwwwwwww", "w.ww.w.w"],
+      colors: { w: "#eef2ff", k: "#1e1b4b", o: "#a5b4fc" },
+    },
+    skeleton: {
+      rows: ["..wwww..", ".wkwwkw.", ".wwwwww.", "..wkkw..", "...ww...", ".wwwwww.", "w..ww..w", "..w..w.."],
+      colors: { w: "#e5e7eb", k: "#111111" },
+    },
+    robot: {
+      rows: ["...rr...", ".mmmmmm.", ".mcmmcm.", ".mmmmmm.", "..mkkm..", ".mmmmmm.", ".m.mm.m.", ".mm..mm."],
+      colors: { r: "#ef4444", m: "#94a3b8", c: "#22d3ee", k: "#334155" },
+    },
+    bat: {
+      rows: ["........", "p..pp..p", "pp.pp.pp", "pprpprpp", ".pppppp.", "..p..p..", "........", "........"],
+      colors: { p: "#6d28d9", r: "#f87171" },
+    },
+
+    // ---- Jefes (level.kinds.boss; "monster" usa el sprite "boss") ----
+    dragon: {
+      rows: [".r....r.", "rrr..rrr", ".rrrrrr.", "rwkrrwkr", "rrrrrrrr", "rryyyyrr", ".rrrrrr.", "rr.rr.rr"],
+      colors: { r: "#dc2626", y: "#fbbf24", w: "#ffffff", k: "#111111" },
+    },
+    vampire: {
+      rows: ["..kkkk..", ".kkffkk.", ".frffrf.", ".ffffff.", "..fwwf..", "pkkkkkkp", "pkkrrkkp", "pk.kk.kp"],
+      colors: { k: "#111827", f: "#e5e7eb", r: "#dc2626", w: "#ffffff", p: "#7c3aed" },
+    },
+    mech: {
+      rows: ["..rmmr..", ".mmmmmm.", "mmcmmcmm", "mmmmmmmm", "mkkkkkkm", "mmmmmmmm", ".mm..mm.", "mmm..mmm"],
+      colors: { r: "#ef4444", m: "#64748b", c: "#22d3ee", k: "#1e293b" },
+    },
   };
+
+  const ENEMY_SPRITE = { blob: "enemy" };
+  // "mixed": cada enemigo toma un aspecto distinto, fijo por posicion.
+  const MIXED_ENEMIES = ["enemy", "slime", "ghost", "skeleton", "robot", "bat"];
+  const BOSS_SPRITE = { monster: "boss" };
+  const ITEM_LABEL = { coin: "Moneda", gem: "Gema", key: "Llave", weapon: "Arma", potion: "Poción", star: "Estrella", fruit: "Fruta" };
 
   function buildSprite(def) {
     const canvas = document.createElement("canvas");
@@ -131,6 +199,12 @@
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
 
+    // Aspecto elegido por la IA o el parser; niveles antiguos sin "kinds" usan los sprites clasicos.
+    const kinds = level.kinds || {};
+    const itemSprite = SPRITE_DEFS[kinds.item] ? kinds.item : "coin";
+    const enemySprite = ENEMY_SPRITE[kinds.enemy] || (SPRITE_DEFS[kinds.enemy] ? kinds.enemy : "enemy");
+    const bossSprite = BOSS_SPRITE[kinds.boss] || (SPRITE_DEFS[kinds.boss] ? kinds.boss : "boss");
+
     const grid = level.grid;
     const W = level.width;
     const H = level.height;
@@ -173,10 +247,11 @@
           const cell = grid[y][x];
           if (cell === "item") items.add(x + "," + y);
           else if (cell === "enemy") {
+            const sprite = kinds.enemy === "mixed" ? MIXED_ENEMIES[Math.floor(hash(x, y, 3) * MIXED_ENEMIES.length)] : enemySprite;
             enemies.push(
               platformer
-                ? { x: x + 0.1, y: y + 0.2, w: 0.8, h: 0.8, dir: hash(x, y, 1) < 0.5 ? -1 : 1, alive: true }
-                : { x, y, hp: 1, cd: 0.3 + hash(x, y, 2) * 0.4, flash: 0, alive: true }
+                ? { x: x + 0.1, y: y + 0.2, w: 0.8, h: 0.8, dir: hash(x, y, 1) < 0.5 ? -1 : 1, alive: true, sprite }
+                : { x, y, hp: 1, cd: 0.3 + hash(x, y, 2) * 0.4, flash: 0, alive: true, sprite }
             );
           } else if (cell === "boss") {
             boss = platformer
@@ -235,6 +310,7 @@
         state.items.delete(key);
         state.collected++;
         state.score += 10;
+        say((ITEM_LABEL[itemSprite] || "Objeto") + " " + state.collected + "/" + state.totalItems, 0.9);
       }
     }
 
@@ -647,7 +723,7 @@
         const [x, y] = key.split(",").map(Number);
         if (x < x0 || x > x1 || y < y0 || y > y1) continue;
         const bob = Math.sin(time * 4 + x) * T * 0.06;
-        drawSprite("coin", x * T + T * 0.15, y * T + T * 0.15 + bob, T * 0.7, T * 0.7);
+        drawSprite(itemSprite, x * T + T * 0.15, y * T + T * 0.15 + bob, T * 0.7, T * 0.7);
       }
     }
 
@@ -658,18 +734,18 @@
     function drawEntities() {
       const p = state.player;
       if (platformer) {
-        for (const e of state.enemies) if (e.alive) drawSprite("enemy", (e.x - 0.05) * T, (e.y - 0.1) * T, T * 0.9, T * 0.9, e.dir > 0);
+        for (const e of state.enemies) if (e.alive) drawSprite(e.sprite, (e.x - 0.05) * T, (e.y - 0.1) * T, T * 0.9, T * 0.9, e.dir > 0);
         if (bossAlive()) {
           const b = state.boss;
-          if (!blink(b.invuln)) drawSprite("boss", (b.x - 0.05) * T, (b.y - 0.05) * T, T * 2, T * 2, b.dir > 0);
+          if (!blink(b.invuln)) drawSprite(bossSprite, (b.x - 0.05) * T, (b.y - 0.05) * T, T * 2, T * 2, b.dir > 0);
         }
         if (!blink(state.invuln)) drawSprite("player", (p.x - 0.1) * T, (p.y - 0.05) * T, T * 0.9, T * 0.95, p.facing < 0);
       } else {
         for (const e of state.enemies) {
-          if (e.alive && !(e.flash > 0 && Math.floor(time * 20) % 2)) drawSprite("enemy", e.x * T, e.y * T, T, T);
+          if (e.alive && !(e.flash > 0 && Math.floor(time * 20) % 2)) drawSprite(e.sprite, e.x * T, e.y * T, T, T);
         }
         if (bossAlive() && !(state.boss.flash > 0 && Math.floor(time * 20) % 2)) {
-          drawSprite("boss", state.boss.x * T - T * 0.15, state.boss.y * T - T * 0.15, T * 1.3, T * 1.3);
+          drawSprite(bossSprite, state.boss.x * T - T * 0.15, state.boss.y * T - T * 0.15, T * 1.3, T * 1.3);
         }
         if (!blink(state.invuln)) drawSprite("player", p.x * T, p.y * T, T, T, p.dir.x < 0);
       }
@@ -683,7 +759,12 @@
       ctx.fillStyle = "#ff5252";
       ctx.fillText("♥".repeat(state.hp) + "♡".repeat(Math.max(0, maxHp - state.hp)), 16, 13);
       ctx.fillStyle = "#ffd700";
-      ctx.fillText("●" + state.collected + "/" + state.totalItems + "  " + state.score + "pts", 130, 13);
+      if (state.totalItems > 0) {
+        ctx.drawImage(SPRITES[itemSprite], 128, 13, 22, 22);
+        ctx.fillText(state.collected + "/" + state.totalItems + "  " + state.score + "pts", 156, 13);
+      } else {
+        ctx.fillText(state.score + "pts", 130, 13);
+      }
 
       if (bossAlive()) {
         const width = 260;
