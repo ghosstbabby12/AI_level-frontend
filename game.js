@@ -206,7 +206,9 @@
       if (!platformer) state.dist = distanceField(state.player.x, state.player.y);
       dirStack.length = 0;
       jumpPressed = false;
-      say(state.boss ? "Derrota al jefe y llega a la salida" : "Llega a la salida", 3);
+      const goal = state.boss ? "Derrota al jefe y llega a la salida" : "Llega a la salida";
+      const title = level.narrative && level.narrative.title;
+      say(title ? title + " · " + goal : goal, 3.5);
     }
 
     function bossAlive() {
