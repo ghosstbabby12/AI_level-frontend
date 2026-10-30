@@ -100,6 +100,7 @@
     await fetch("/api/auth/logout", { method: "POST" });
     if (game) { game.destroy(); game = null; }
     $("result").hidden = true;
+    $("story").hidden = true;
     setResultActions(false);
     $("chips").replaceChildren();
     setAuthMode("login");
@@ -168,6 +169,16 @@
       if (res.status === 401) { showAuth(); return; }
       if (!res.ok) throw new Error(level.error || "Error al generar el nivel");
 
+      // Titulo, historia y frase del jefe (niveles de un backend antiguo pueden no traerla).
+      const story = level.narrative;
+      $("story").hidden = !story;
+      if (story) {
+        $("story-title").textContent = story.title;
+        $("story-text").textContent = story.story;
+        $("story-boss").textContent = story.bossLine ? `«${story.bossLine}»` : "";
+        $("story-boss").hidden = !story.bossLine;
+      }
+
       $("chips").replaceChildren(...level.interpretation.map((text) => {
         const chip = document.createElement("span");
         chip.className = "chip";
@@ -186,7 +197,7 @@
       if (game) game.destroy();
       game = window.LevelGame.create(canvas, level);
       showTab("play");
-      $("chips").scrollIntoView({ behavior: "smooth", block: "start" });
+      $("story").scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (err) {
       errorEl.textContent = err.message;
     } finally {
