@@ -3,6 +3,7 @@
 
   const VIEW_W = 960;
   const VIEW_H = 600;
+  const HUD_H = 48;
 
   const SPRITE_DEFS = {
     player: {
@@ -97,6 +98,28 @@
     },
   };
 
+  // Perseguidores asustados o devueltos a la guarida en el modo arcade
+  Object.assign(SPRITE_DEFS, {
+    scared: {
+      rows: ["..bbbb..", ".bbbbbb.", "bbwbbwbb", "bbwbbwbb", "bbbbbbbb", "bwbwbwbb", "bbbbbbbb", "b.bb.b.b"],
+      colors: { b: "#2547d0", w: "#f8fafc" },
+    },
+    scaredFlash: {
+      rows: ["..wwww..", ".wwwwww.", "wwrwwrww", "wwrwwrww", "wwwwwwww", "wrwrwrww", "wwwwwwww", "w.ww.w.w"],
+      colors: { w: "#f8fafc", r: "#e11d48" },
+    },
+    eyes: {
+      rows: ["........", "........", ".ww..ww.", ".wk..wk.", ".ww..ww.", "........", "........", "........"],
+      colors: { w: "#f8fafc", k: "#2547d0" },
+    },
+  });
+
+  SPRITE_DEFS.bomb = {
+    rows: ["....fy..", "...f....", "..kkkk..", ".kkkkkk.", ".kwkkkk.", ".kkkkkk.", ".kkkkkk.", "..kkkk.."],
+    colors: { k: "#111827", w: "#94a3b8", f: "#a16207", y: "#f97316" },
+  };
+
+  const ARCADE_BOSS_HP = { easy: 2, normal: 3, hard: 4 };
   const ENEMY_SPRITE = { blob: "enemy" };
   // "mixed": cada enemigo toma un aspecto distinto, fijo por posicion.
   const MIXED_ENEMIES = ["enemy", "slime", "ghost", "skeleton", "robot", "bat"];
@@ -209,7 +232,10 @@
     const W = level.width;
     const H = level.height;
     const platformer = level.layout === "platformer";
-    const T = platformer ? Math.floor(VIEW_H / H) : 36;
+    const arcade = level.layout === "arcade";
+    const shooter = level.layout === "shooter";
+    // Arcade: el tablero entero cabe en pantalla, dejando sitio al marcador.
+    const T = platformer ? Math.floor(VIEW_H / H) : arcade ? Math.floor(Math.min(VIEW_W / W, (VIEW_H - HUD_H) / H)) : shooter ? Math.floor(Math.min(VIEW_W / W, VIEW_H / H)) : 36;
     const textures = makeTextures(level);
     const maxHp = { easy: 5, normal: 4, hard: 3 }[level.difficulty] || 4;
     const bossMaxHp = platformer
@@ -224,6 +250,9 @@
     let rafId = 0;
     let lastFrame = 0;
     let camera = { x: 0, y: 0 };
+    let cameraReady = false;
+    let frameDt = 0;
+    const board = arcade ? buildArcadeBoard() : null;
     let banner = { text: "", ttl: 0 };
 
     const cellAt = (x, y) => (y >= 0 && y < H && x >= 0 && x < W ? grid[y][x] : "wall");
@@ -238,25 +267,35 @@
     }
 
     function reset() {
+      if (shooter) {
+        resetShooter();
+        return;
+      }
       const start = findCell("start");
       const items = new Set();
+      const powers = new Set();
       const enemies = [];
       let boss = null;
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const cell = grid[y][x];
           if (cell === "item") items.add(x + "," + y);
+          else if (cell === "power") powers.add(x + "," + y);
           else if (cell === "enemy") {
             const sprite = kinds.enemy === "mixed" ? MIXED_ENEMIES[Math.floor(hash(x, y, 3) * MIXED_ENEMIES.length)] : enemySprite;
             enemies.push(
               platformer
                 ? { x: x + 0.1, y: y + 0.2, w: 0.8, h: 0.8, dir: hash(x, y, 1) < 0.5 ? -1 : 1, alive: true, sprite }
-                : { x, y, hp: 1, cd: 0.3 + hash(x, y, 2) * 0.4, flash: 0, alive: true, sprite }
+                : arcade
+                  ? { x, y, home: { x, y }, dir: { x: 0, y: 0 }, release: 1 + enemies.length * 2.5, mode: "chase", spared: false, alive: true, sprite, slot: enemies.length }
+                  : { x, y, hp: 1, target: null, wait: hash(x, y, 2) * 0.6, stun: 0, flash: 0, alive: true, sprite }
             );
           } else if (cell === "boss") {
             boss = platformer
               ? { x, y: y - 1, w: 1.9, h: 1.9, vx: 0, vy: 0, dir: -1, hp: bossMaxHp, invuln: 0, jumpT: 2, minX: Math.max(2, x - 9), maxX: W - 4, alive: true }
-              : { x, y, hp: bossMaxHp, cd: 0.6, flash: 0, alive: true };
+              : arcade
+                ? { x, y, home: { x, y }, dir: { x: 0, y: 0 }, release: 4, mode: "chase", spared: false, alive: true, hp: ARCADE_BOSS_HP[level.difficulty] || 3, slot: 0 }
+                : { x, y, hp: bossMaxHp, target: null, wait: 0.5, stun: 0, flash: 0, alive: true };
           }
         }
       }
@@ -265,9 +304,12 @@
         status: "playing",
         hp: maxHp,
         score: 0,
-        totalItems: items.size,
+        totalItems: items.size + powers.size,
         collected: 0,
         items,
+        powers,
+        fright: 0,
+        combo: 0,
         enemies,
         boss,
         invuln: 0,
@@ -275,13 +317,25 @@
         exit: findCell("exit"),
         player: platformer
           ? { x: start.x + 0.15, y: start.y + 0.1, w: 0.7, h: 0.9, vx: 0, vy: 0, onGround: false, coyote: 0, jumpBuf: 0, facing: 1, safe: { x: start.x + 0.15, y: start.y + 0.1 } }
-          : { x: start.x, y: start.y, dir: { x: 1, y: 0 }, moveCd: 0 },
+          : arcade
+            ? { x: start.x, y: start.y, home: { x: start.x, y: start.y }, dir: { x: 0, y: 0 }, want: { x: 0, y: 0 }, facing: 1 }
+            : { x: start.x, y: start.y, vx: 0, vy: 0, dir: { x: 1, y: 0 }, tile: { x: start.x, y: start.y }, attackCd: 0, swing: 0, dashT: 0, dashCd: 0, moving: false, trail: [] },
         dist: null,
+        homeDist: null,
       };
-      if (!platformer) state.dist = distanceField(state.player.x, state.player.y);
+      if (!platformer) state.dist = distanceField(start.x, start.y);
+      if (arcade) {
+        state.homeDist = distanceField(Math.floor(W / 2), Math.floor(H / 2));
+        state.corners = [[1, 1], [W - 2, 1], [1, H - 2], [W - 2, H - 2]].map(([x, y]) => distanceField(x, y));
+        state.retreating = true;
+        state.phase = RETREAT_PHASE;
+      }
       dirStack.length = 0;
       jumpPressed = false;
-      const goal = state.boss ? "Derrota al jefe y llega a la salida" : "Llega a la salida";
+      cameraReady = false;
+      const goal = arcade
+        ? state.boss ? "Recógelo todo y atrapa al jefe" : "Recógelo todo sin que te atrapen"
+        : state.boss ? "Derrota al jefe y llega a la salida" : "Llega a la salida";
       const title = level.narrative && level.narrative.title;
       say(title ? title + " · " + goal : goal, 3.5);
     }
@@ -306,12 +360,11 @@
 
     function collect(x, y) {
       const key = x + "," + y;
-      if (state.items.has(key)) {
-        state.items.delete(key);
-        state.collected++;
-        state.score += 10;
-        say((ITEM_LABEL[itemSprite] || "Objeto") + " " + state.collected + "/" + state.totalItems, 0.9);
-      }
+      if (!state.items.has(key)) return;
+      state.items.delete(key);
+      state.collected++;
+      state.score += 10;
+      if (!arcade) say((ITEM_LABEL[itemSprite] || "Objeto") + " " + state.collected + "/" + state.totalItems, 0.9);
     }
 
     function win() {
@@ -328,10 +381,12 @@
     function killBoss() {
       state.boss.alive = false;
       state.score += 200;
-      say("¡Jefe derrotado! La salida está abierta", 3);
+      say(arcade ? "¡Jefe derrotado!" : "¡Jefe derrotado! La salida está abierta", 3);
     }
 
     // ---------------------------------------------------------------- top-down
+    const wrapX = (x) => (arcade ? (x + W) % W : x);
+
     function distanceField(px, py) {
       const dist = Array.from({ length: H }, () => Array(W).fill(-1));
       dist[py][px] = 0;
@@ -339,7 +394,7 @@
       for (let head = 0; head < queue.length; head++) {
         const [x, y] = queue[head];
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = x + dx;
+          const nx = wrapX(x + dx);
           const ny = y + dy;
           if (nx >= 0 && nx < W && ny >= 0 && ny < H && dist[ny][nx] === -1 && grid[ny][nx] !== "wall") {
             dist[ny][nx] = dist[y][x] + 1;
@@ -350,93 +405,652 @@
       return dist;
     }
 
-    function entityAt(x, y) {
-      for (const e of state.enemies) if (e.alive && e.x === x && e.y === y) return e;
-      if (bossAlive() && state.boss.x === x && state.boss.y === y) return state.boss;
-      return null;
+    // Movimiento libre: maze, dungeon y cave. Posiciones en casillas con decimales.
+    const PLAYER_SPEED = 5.4;
+    const PLAYER_HALF = 0.3;
+    const DASH_SPEED = 13;
+    const DASH_TIME = 0.16;
+    const DASH_COOLDOWN = 0.9;
+    const ATTACK_RANGE = 1.6;
+    const ATTACK_COOLDOWN = 0.28;
+    const CHASE_RADIUS = 8;
+    // En hielo se patina: la velocidad cambia mas despacio.
+    const GRIP = level.theme === "ice" ? 5 : 16;
+    const wallAt = (x, y) => cellAt(x, y) === "wall";
+
+    function blockedAt(cx, cy) {
+      const r = PLAYER_HALF;
+      return wallAt(Math.floor(cx - r), Math.floor(cy - r)) || wallAt(Math.floor(cx + r), Math.floor(cy - r)) ||
+        wallAt(Math.floor(cx - r), Math.floor(cy + r)) || wallAt(Math.floor(cx + r), Math.floor(cy + r));
     }
+
+    // Mueve por ejes separados para deslizar por las paredes; si una esquina estorba, centra al jugador en el pasillo.
+    function slide(p, dx, dy) {
+      let cx = p.x + 0.5;
+      let cy = p.y + 0.5;
+      if (dx) {
+        if (!blockedAt(cx + dx, cy)) cx += dx;
+        else {
+          const row = Math.floor(cy) + 0.5;
+          const ahead = Math.floor(cx + dx + Math.sign(dx) * PLAYER_HALF);
+          if (!wallAt(ahead, Math.floor(cy)) && !blockedAt(cx, cy + Math.sign(row - cy) * Math.min(Math.abs(row - cy), Math.abs(dx)))) {
+            cy += Math.sign(row - cy) * Math.min(Math.abs(row - cy), Math.abs(dx));
+          } else p.vx = 0;
+        }
+      }
+      if (dy) {
+        if (!blockedAt(cx, cy + dy)) cy += dy;
+        else {
+          const col = Math.floor(cx) + 0.5;
+          const ahead = Math.floor(cy + dy + Math.sign(dy) * PLAYER_HALF);
+          if (!wallAt(Math.floor(cx), ahead) && !blockedAt(cx + Math.sign(col - cx) * Math.min(Math.abs(col - cx), Math.abs(dy)), cy)) {
+            cx += Math.sign(col - cx) * Math.min(Math.abs(col - cx), Math.abs(dy));
+          } else p.vy = 0;
+        }
+      }
+      p.x = cx - 0.5;
+      p.y = cy - 0.5;
+    }
+
+    const held = (...codes) => codes.some((code) => keys.has(code));
 
     function hitEntity(entity) {
       entity.hp--;
       entity.flash = 0.2;
+      entity.stun = 0.3;
       if (entity.hp > 0) return;
       entity.alive = false;
       if (entity === state.boss) killBoss();
       else state.score += 25;
     }
 
-    function tdMove(dx, dy) {
+    function attack() {
       const p = state.player;
-      p.dir = { x: dx, y: dy };
-      const nx = p.x + dx;
-      const ny = p.y + dy;
-      if (solid(nx, ny)) return;
-      const target = entityAt(nx, ny);
-      if (target) {
-        hitEntity(target);
+      if (p.attackCd > 0) return;
+      p.attackCd = ATTACK_COOLDOWN;
+      p.swing = 0.14;
+      const targets = state.enemies.filter((e) => e.alive);
+      if (bossAlive()) targets.push(state.boss);
+      for (const e of targets) {
+        const dx = e.x - p.x;
+        const dy = e.y - p.y;
+        const d = Math.hypot(dx, dy);
+        if (d > ATTACK_RANGE) continue;
+        const inFront = d < 0.8 || (dx * p.dir.x + dy * p.dir.y) / d > 0.25;
+        const clear = !wallAt(Math.floor(p.x + 0.5 + dx / 2), Math.floor(p.y + 0.5 + dy / 2));
+        if (inFront && clear) hitEntity(e);
+      }
+    }
+
+    function dash() {
+      const p = state.player;
+      if (p.dashCd > 0) return;
+      p.dashT = DASH_TIME;
+      p.dashCd = DASH_COOLDOWN;
+    }
+
+    function stepChaser(e, isBoss, dt) {
+      e.flash = Math.max(0, e.flash - dt);
+      if (e.stun > 0) {
+        e.stun -= dt;
         return;
       }
-      p.x = nx;
-      p.y = ny;
-      state.dist = distanceField(nx, ny);
-      collect(nx, ny);
-      if (cellAt(nx, ny) === "trap") {
-        if (hurt(1)) say("¡Trampa!", 0.8);
+      const speed = (isBoss ? { easy: 1.7, normal: 2.2, hard: 2.8 } : { easy: 1.6, normal: 2.1, hard: 2.7 })[level.difficulty] || 2.1;
+
+      if (e.target) {
+        const dx = e.target.x - e.x;
+        const dy = e.target.y - e.y;
+        const d = Math.hypot(dx, dy);
+        const step = speed * dt;
+        if (d <= step) {
+          e.x = e.target.x;
+          e.y = e.target.y;
+          e.target = null;
+        } else {
+          e.x += (dx / d) * step;
+          e.y += (dy / d) * step;
+        }
+        return;
       }
-      if (state.exit && nx === state.exit.x && ny === state.exit.y) tryExit();
-    }
 
-    function tdAttack() {
-      const p = state.player;
-      const target = entityAt(p.x + p.dir.x, p.y + p.dir.y);
-      if (target) hitEntity(target);
-    }
+      e.wait -= dt;
+      if (e.wait > 0) return;
 
-    function stepEnemy(e, isBoss, dt) {
-      e.flash = Math.max(0, e.flash - dt);
-      e.cd -= dt;
-      if (e.cd > 0) return;
-      const p = state.player;
-      const speed = isBoss ? { easy: 0.7, normal: 0.55, hard: 0.42 }[level.difficulty] || 0.55 : 0.5;
-      e.cd = speed;
-
-      const here = state.dist[e.y][e.x];
-      const chase = isBoss ? here !== -1 : here !== -1 && here <= 8;
+      const others = state.enemies.filter((o) => o.alive && o !== e);
+      if (bossAlive() && !isBoss) others.push(state.boss);
+      const taken = (x, y) => others.some((o) => (o.target ? o.target.x === x && o.target.y === y : Math.round(o.x) === x && Math.round(o.y) === y));
       const options = [[1, 0], [-1, 0], [0, 1], [0, -1]]
         .map(([dx, dy]) => ({ x: e.x + dx, y: e.y + dy }))
-        .filter((c) => !solid(c.x, c.y));
+        .filter((c) => !wallAt(c.x, c.y) && !taken(c.x, c.y));
+      if (!options.length) {
+        e.wait = 0.2;
+        return;
+      }
 
-      if (chase && here > 0) {
-        const best = options
-          .filter((c) => state.dist[c.y][c.x] !== -1)
-          .sort((a, b) => state.dist[a.y][a.x] - state.dist[b.y][b.x])[0];
-        if (best && best.x === p.x && best.y === p.y) {
-          if (hurt(1)) say(isBoss ? "¡El jefe te golpea!" : "¡Te atacaron!", 0.8);
-          return;
+      const here = state.dist[e.y][e.x];
+      if (here !== -1 && (isBoss || here <= CHASE_RADIUS)) {
+        const best = options.filter((c) => state.dist[c.y][c.x] !== -1).sort((a, b) => state.dist[a.y][a.x] - state.dist[b.y][b.x])[0];
+        if (best && state.dist[best.y][best.x] < here) e.target = best;
+        else e.wait = 0.2;
+      } else if (Math.random() < 0.45) {
+        e.target = options[Math.floor(Math.random() * options.length)];
+      } else {
+        e.wait = 0.3 + Math.random() * 0.6;
+      }
+    }
+
+    function touchDamage(e, reach, message) {
+      const p = state.player;
+      const dx = p.x - e.x;
+      const dy = p.y - e.y;
+      const d = Math.hypot(dx, dy);
+      if (d > reach || p.dashT > 0) return;
+      if (hurt(1)) {
+        say(message, 0.8);
+        // Empujon para no recibir golpes seguidos.
+        p.vx = (d ? dx / d : 0) * 9;
+        p.vy = (d ? dy / d : -1) * 9;
+      }
+    }
+
+    function updateFree(dt) {
+      const p = state.player;
+      p.attackCd = Math.max(0, p.attackCd - dt);
+      p.swing = Math.max(0, p.swing - dt);
+      p.dashCd = Math.max(0, p.dashCd - dt);
+
+      const ix = (held("ArrowRight", "KeyD") ? 1 : 0) - (held("ArrowLeft", "KeyA") ? 1 : 0);
+      const iy = (held("ArrowDown", "KeyS") ? 1 : 0) - (held("ArrowUp", "KeyW") ? 1 : 0);
+      const len = Math.hypot(ix, iy);
+      p.moving = len > 0;
+      if (len) p.dir = { x: ix / len, y: iy / len };
+
+      if (p.dashT > 0) {
+        p.dashT -= dt;
+        p.vx = p.dir.x * DASH_SPEED;
+        p.vy = p.dir.y * DASH_SPEED;
+        p.trail.push({ x: p.x, y: p.y, life: 0.2 });
+      } else {
+        const k = 1 - Math.exp(-GRIP * dt);
+        p.vx += ((len ? ix / len : 0) * PLAYER_SPEED - p.vx) * k;
+        p.vy += ((len ? iy / len : 0) * PLAYER_SPEED - p.vy) * k;
+      }
+      for (const t of p.trail) t.life -= dt;
+      p.trail = p.trail.filter((t) => t.life > 0);
+
+      // Subpasos para no atravesar paredes a alta velocidad.
+      const steps = Math.max(1, Math.ceil((Math.max(Math.abs(p.vx), Math.abs(p.vy)) * dt) / 0.2));
+      for (let i = 0; i < steps; i++) slide(p, (p.vx * dt) / steps, (p.vy * dt) / steps);
+
+      const tx = Math.floor(p.x + 0.5);
+      const ty = Math.floor(p.y + 0.5);
+      if (tx !== p.tile.x || ty !== p.tile.y) {
+        p.tile = { x: tx, y: ty };
+        state.dist = distanceField(tx, ty);
+        collect(tx, ty);
+      }
+      if (cellAt(tx, ty) === "trap" && p.dashT <= 0 && hurt(1)) say("¡Trampa!", 0.8);
+      if (state.exit && tx === state.exit.x && ty === state.exit.y) tryExit();
+
+      for (const e of state.enemies) {
+        if (!e.alive) continue;
+        stepChaser(e, false, dt);
+        touchDamage(e, 0.72, "¡Te atacaron!");
+      }
+      if (bossAlive()) {
+        stepChaser(state.boss, true, dt);
+        touchDamage(state.boss, 0.95, "¡El jefe te golpea!");
+      }
+    }
+
+    // Modo arcade: todos se mueven sobre rieles de casilla en casilla, sin detenerse.
+    const ARCADE_PLAYER_SPEED = 6;
+    const FRIGHT_TIME = { easy: 8, normal: 6, hard: 4 }[level.difficulty] || 6;
+    const CHASER_SPEED = { easy: 3.4, normal: 4, hard: 4.5 }[level.difficulty] || 4.4;
+    // Cuanto se distrae cada perseguidor: unos van directos y otros cortan por otro lado.
+    const WANDER = [0, 0.15, 0.3, 0.45];
+    // Fases: persiguen un rato y luego se retiran a su esquina, dando respiro para recoger.
+    const CHASE_PHASE = { easy: 8, normal: 12, hard: 18 }[level.difficulty] || 12;
+    const RETREAT_PHASE = { easy: 7, normal: 6, hard: 4 }[level.difficulty] || 6;
+    const openAt = (x, y) => y >= 0 && y < H && grid[y][wrapX(x)] !== "wall";
+
+    function railMove(e, speed, dt, choose) {
+      let left = speed * dt;
+      for (let guard = 0; left > 1e-6 && guard < 8; guard++) {
+        if (Math.abs(e.x - Math.round(e.x)) < 1e-6 && Math.abs(e.y - Math.round(e.y)) < 1e-6) {
+          e.x = Math.round(e.x);
+          e.y = Math.round(e.y);
+          choose(e);
+          if ((!e.dir.x && !e.dir.y) || !openAt(e.x + e.dir.x, e.y + e.dir.y)) {
+            e.dir = { x: 0, y: 0 };
+            return;
+          }
         }
-        if (best && !entityAt(best.x, best.y) && state.dist[best.y][best.x] < here) {
-          e.x = best.x;
-          e.y = best.y;
-        }
-      } else if (Math.random() < 0.4 && options.length) {
-        const c = options[Math.floor(Math.random() * options.length)];
-        if (!entityAt(c.x, c.y) && !(c.x === p.x && c.y === p.y)) {
-          e.x = c.x;
-          e.y = c.y;
+        const tx = e.dir.x > 0 ? Math.floor(e.x) + 1 : e.dir.x < 0 ? Math.ceil(e.x) - 1 : e.x;
+        const ty = e.dir.y > 0 ? Math.floor(e.y) + 1 : e.dir.y < 0 ? Math.ceil(e.y) - 1 : e.y;
+        const d = Math.abs(tx - e.x) + Math.abs(ty - e.y);
+        if (d <= left) {
+          e.x = wrapX(tx);
+          e.y = ty;
+          left -= d;
+        } else {
+          e.x += e.dir.x * left;
+          e.y += e.dir.y * left;
+          left = 0;
         }
       }
     }
 
-    function updateTopDown(dt) {
-      const p = state.player;
-      p.moveCd -= dt;
-      const dir = dirStack[dirStack.length - 1];
-      if (dir && p.moveCd <= 0) {
-        tdMove(dir[0], dir[1]);
-        p.moveCd = 0.13;
+    function choosePlayerDir(p) {
+      if ((p.want.x || p.want.y) && openAt(p.x + p.want.x, p.y + p.want.y)) p.dir = p.want;
+      if (p.dir.x) p.facing = p.dir.x;
+    }
+
+    // Sin nada por recoger el jefe queda siempre vulnerable: si no, ya no habria forma de terminar el nivel.
+    const finale = () => !state.items.size && !state.powers.size;
+    const frightened = (e) => {
+      if (e.mode === "eaten") return false;
+      if (e === state.boss && finale()) return true;
+      return state.fright > 0 && !e.spared;
+    };
+
+    function chooseChaserDir(e) {
+      // Reaparece en el centro de la guarida. Se comprueba aqui porque a alta velocidad cruza casillas dentro de un mismo frame.
+      if (e.mode === "eaten" && state.homeDist[e.y][e.x] === 0) {
+        e.mode = "chase";
+        e.dir = { x: 0, y: 0 };
+        e.release = 1;
+        return;
       }
-      for (const e of state.enemies) if (e.alive) stepEnemy(e, false, dt);
-      if (bossAlive()) stepEnemy(state.boss, true, dt);
+      const options = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        .map(([x, y]) => ({ x, y }))
+        .filter((d) => openAt(e.x + d.x, e.y + d.y));
+      const forward = options.filter((d) => d.x !== -e.dir.x || d.y !== -e.dir.y || (!e.dir.x && !e.dir.y));
+      const pool = forward.length ? forward : options;
+      if (!pool.length) return;
+      const score = (field, d) => field[e.y + d.y][wrapX(e.x + d.x)];
+
+      if (e.mode === "eaten") {
+        e.dir = options.reduce((best, d) => (score(state.homeDist, d) < score(state.homeDist, best) ? d : best));
+      } else if (frightened(e)) {
+        e.dir = pool.reduce((best, d) => (score(state.dist, d) > score(state.dist, best) ? d : best));
+      } else if (state.retreating && e !== state.boss) {
+        const corner = state.corners[e.slot % state.corners.length];
+        e.dir = pool.reduce((best, d) => (score(corner, d) < score(corner, best) ? d : best));
+      } else if (Math.random() < WANDER[e.slot % WANDER.length]) {
+        e.dir = pool[Math.floor(Math.random() * pool.length)];
+      } else {
+        e.dir = pool.reduce((best, d) => (score(state.dist, d) < score(state.dist, best) ? d : best));
+      }
+    }
+
+    function eatPower() {
+      state.fright = FRIGHT_TIME;
+      state.combo = 0;
+      const all = state.boss ? [...state.enemies, state.boss] : state.enemies;
+      for (const e of all) {
+        e.spared = false;
+        if (e.mode !== "eaten") e.dir = { x: -e.dir.x, y: -e.dir.y };
+      }
+      state.score += 50;
+      say("¡Ahora te temen a ti!", 1.2);
+    }
+
+    function sendHome(e) {
+      e.mode = "eaten";
+      e.spared = true;
+    }
+
+    function respawnArcade() {
+      const p = state.player;
+      p.x = p.home.x;
+      p.y = p.home.y;
+      p.dir = { x: 0, y: 0 };
+      p.want = { x: 0, y: 0 };
+      state.dist = distanceField(p.x, p.y);
+      state.fright = 0;
+      state.retreating = true;
+      state.phase = RETREAT_PHASE;
+      const all = state.boss && state.boss.alive ? [...state.enemies, state.boss] : state.enemies;
+      all.forEach((e, i) => {
+        e.x = e.home.x;
+        e.y = e.home.y;
+        e.dir = { x: 0, y: 0 };
+        e.mode = "chase";
+        e.spared = false;
+        e.release = 1 + i * 1.5;
+      });
+    }
+
+    function arcadeContact(e, reach) {
+      const p = state.player;
+      if (e.mode === "eaten" || Math.abs(p.x - e.x) + Math.abs(p.y - e.y) > reach) return;
+      if (frightened(e)) {
+        state.combo++;
+        state.score += 100 * 2 ** (state.combo - 1);
+        if (e === state.boss) {
+          e.hp--;
+          if (e.hp <= 0) {
+            e.alive = false;
+            killBoss();
+            return;
+          }
+          say("¡Golpe al jefe! Quedan " + e.hp, 1.2);
+        }
+        sendHome(e);
+      } else if (hurt(1) && state.status === "playing") {
+        say("¡Te atraparon!", 1.2);
+        respawnArcade();
+      }
+    }
+
+    function moveChaser(e, baseSpeed, dt) {
+      if (e.release > 0) {
+        e.release -= dt;
+        return;
+      }
+      const speed = e.mode === "eaten" ? 10 : frightened(e) ? baseSpeed * 0.6 : baseSpeed;
+      railMove(e, speed, dt, chooseChaserDir);
+    }
+
+    function updateArcade(dt) {
+      const p = state.player;
+      if (state.fright > 0) state.fright = Math.max(0, state.fright - dt);
+      else {
+        // El reloj de fases se detiene mientras dura el potenciador.
+        state.phase -= dt;
+        if (state.phase <= 0) {
+          state.retreating = !state.retreating;
+          state.phase = state.retreating ? RETREAT_PHASE : CHASE_PHASE;
+        }
+      }
+
+      // Dar media vuelta no espera al siguiente cruce.
+      if ((p.want.x || p.want.y) && p.want.x === -p.dir.x && p.want.y === -p.dir.y) p.dir = p.want;
+      railMove(p, ARCADE_PLAYER_SPEED, dt, choosePlayerDir);
+
+      const tx = wrapX(Math.round(p.x));
+      const ty = Math.round(p.y);
+      if (Math.abs(p.x - Math.round(p.x)) + Math.abs(p.y - ty) < 0.4) {
+        const key = tx + "," + ty;
+        collect(tx, ty);
+        if (state.powers.delete(key)) {
+          state.collected++;
+          eatPower();
+        }
+      }
+      if (!p.tile || p.tile.x !== tx || p.tile.y !== ty) {
+        p.tile = { x: tx, y: ty };
+        state.dist = distanceField(tx, ty);
+      }
+
+      for (const e of state.enemies) {
+        moveChaser(e, CHASER_SPEED, dt);
+        arcadeContact(e, 0.7);
+        if (state.status !== "playing") return;
+      }
+      if (bossAlive()) {
+        moveChaser(state.boss, CHASER_SPEED - 0.4, dt);
+        arcadeContact(state.boss, 0.9);
+      }
+
+      if (!state.items.size && !state.powers.size) {
+        if (!bossAlive()) win();
+        else if (!state.finaleSaid) {
+          state.finaleSaid = true;
+          say("¡Ya no te queda nada por recoger: atrapa al jefe!", 2.5);
+        }
+      }
+    }
+
+    // ----------------------------------------------------------------- shooter
+    // Galeria de tiro: la cuadricula dice donde aparece cada blanco; se apunta con el mouse o las flechas.
+    const SHOOT = {
+      lifetime: { easy: 2.8, normal: 2.1, hard: 1.5 }[level.difficulty] || 2.1,
+      maxActive: { easy: 2, normal: 3, hard: 4 }[level.difficulty] || 3,
+      movingSpeed: { easy: 2.5, normal: 3.5, hard: 4.5 }[level.difficulty] || 3.5,
+      bossHp: { easy: 3, normal: 5, hard: 8 }[level.difficulty] || 5,
+      bossTime: { easy: 20, normal: 16, hard: 13 }[level.difficulty] || 16,
+    };
+    const GOAL_RATIO = 0.6;
+    const AIM_SPEED = 620;
+    const toViewX = (x) => (x + 0.5) * T - camera.x;
+    const toViewY = (y) => (y + 0.5) * T - camera.y;
+
+    function resetShooter() {
+      const queue = [];
+      let bossCell = null;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const cell = grid[y][x];
+          if (cell === "item") queue.push({ kind: hash(x, y, 8) < 0.2 ? "bonus" : "target", x, y });
+          else if (cell === "enemy") queue.push({ kind: "moving", x, y, sprite: kinds.enemy === "mixed" ? MIXED_ENEMIES[Math.floor(hash(x, y, 3) * MIXED_ENEMIES.length)] : enemySprite });
+          else if (cell === "trap") queue.push({ kind: "bomb", x, y });
+          else if (cell === "boss") bossCell = { x, y };
+        }
+      }
+      queue.sort((a, b) => hash(a.x, a.y, 9) - hash(b.x, b.y, 9));
+      const scorable = queue.filter((t) => t.kind !== "bomb").length;
+
+      state = {
+        status: "playing",
+        hp: maxHp,
+        score: 0,
+        totalItems: Math.ceil(scorable * GOAL_RATIO),
+        collected: 0,
+        scorable,
+        items: new Set(),
+        powers: new Set(),
+        enemies: [],
+        boss: null,
+        bossCell,
+        invuln: 0,
+        flash: 0,
+        exit: null,
+        player: { x: 0, y: 0 },
+        aim: { x: VIEW_W / 2, y: VIEW_H / 2 },
+        ammo: Math.floor(scorable * 1.6) + 5,
+        shots: 0,
+        queue,
+        active: [],
+        spawnCd: 1.2,
+        effects: [],
+        dist: null,
+      };
+      cameraReady = false;
+      const title = level.narrative && level.narrative.title;
+      const goal = "Acierta " + state.totalItems + " de " + scorable + " blancos · No dispares a las bombas";
+      say(title ? title + " · " + goal : goal, 3.5);
+    }
+
+    function spawnTarget() {
+      const t = state.queue.shift();
+      const entry = { ...t, age: 0, ttl: SHOOT.lifetime };
+      if (t.kind === "moving") {
+        // Cruza la pantalla por su carril, hacia un lado o el otro segun su posicion.
+        entry.dir = hash(t.x, t.y, 4) < 0.5 ? 1 : -1;
+        entry.x = entry.dir > 0 ? -1 : W;
+        entry.ttl = (W + 2) / SHOOT.movingSpeed;
+      }
+      state.active.push(entry);
+    }
+
+    function addEffect(x, y, color, text) {
+      state.effects.push({ x, y, color, text, life: 0.5 });
+    }
+
+    function finishRound() {
+      if (state.collected < state.totalItems) {
+        state.status = "lost";
+        say("Te faltó puntería: " + state.collected + "/" + state.totalItems + " - Pulsa R para reintentar", 999);
+      } else if (state.bossCell && !state.boss) {
+        // Aparece al final, con municion para intentarlo.
+        const b = state.bossCell;
+        state.boss = { x: b.x, y: b.y, baseY: b.y, hp: SHOOT.bossHp, alive: true, t: 0, ttl: SHOOT.bossTime, flash: 0 };
+        state.ammo += SHOOT.bossHp * 3;
+        say("¡Acierta al jefe antes de que escape!", 2.5);
+      } else {
+        win();
+      }
+    }
+
+    function shoot() {
+      if (state.status !== "playing") return;
+      if (state.ammo <= 0) {
+        say("Sin munición", 0.8);
+        return;
+      }
+      state.ammo--;
+      state.shots++;
+      const { x: ax, y: ay } = state.aim;
+
+      if (bossAlive()) {
+        const b = state.boss;
+        if (Math.hypot(ax - toViewX(b.x), ay - toViewY(b.y)) < T * 1.3) {
+          b.hp--;
+          b.flash = 0.2;
+          state.score += 50;
+          addEffect(ax, ay, "#fde047", "+50");
+          if (b.hp <= 0) {
+            killBoss();
+            win();
+          }
+          return;
+        }
+      }
+
+      // Los ultimos en aparecer quedan delante.
+      for (let i = state.active.length - 1; i >= 0; i--) {
+        const t = state.active[i];
+        const d = Math.hypot(ax - toViewX(t.x), ay - toViewY(t.y));
+        const radius = t.kind === "target" ? T * 0.8 : T * 0.62;
+        if (d > radius) continue;
+        state.active.splice(i, 1);
+        if (t.kind === "bomb") {
+          hurt(1, true);
+          addEffect(ax, ay, "#fb923c", "¡BOMBA!");
+          if (state.status === "playing") say("¡Era una bomba!", 0.9);
+          return;
+        }
+        state.collected++;
+        // En una diana, cuanto mas al centro, mas puntos.
+        const multiplier = t.kind === "target" ? (d < radius * 0.3 ? 3 : d < radius * 0.65 ? 2 : 1) : 2;
+        const points = 10 * multiplier + (t.kind === "bonus" ? 20 : 0);
+        state.score += points;
+        addEffect(ax, ay, multiplier === 3 ? "#fde047" : "#ffffff", "+" + points);
+        return;
+      }
+      addEffect(ax, ay, "rgba(255,255,255,0.6)", "");
+    }
+
+    function updateShooter(dt) {
+      const aimX = (held("ArrowRight", "KeyD") ? 1 : 0) - (held("ArrowLeft", "KeyA") ? 1 : 0);
+      const aimY = (held("ArrowDown", "KeyS") ? 1 : 0) - (held("ArrowUp", "KeyW") ? 1 : 0);
+      state.aim.x = Math.max(0, Math.min(VIEW_W, state.aim.x + aimX * AIM_SPEED * dt));
+      state.aim.y = Math.max(0, Math.min(VIEW_H, state.aim.y + aimY * AIM_SPEED * dt));
+
+      for (const fx of state.effects) fx.life -= dt;
+      state.effects = state.effects.filter((fx) => fx.life > 0);
+
+      if (bossAlive()) {
+        const b = state.boss;
+        b.t += dt;
+        b.flash = Math.max(0, b.flash - dt);
+        b.x = W / 2 - 0.5 + Math.sin(b.t * 1.4) * (W / 2 - 3);
+        b.y = b.baseY + (Math.sin(b.t * 2.3) + 1) * 2;
+        if (b.t >= b.ttl) {
+          state.status = "lost";
+          say("¡El jefe escapó! - Pulsa R para reintentar", 999);
+        }
+        return;
+      }
+
+      state.spawnCd -= dt;
+      if (state.spawnCd <= 0 && state.queue.length && state.active.length < SHOOT.maxActive) {
+        spawnTarget();
+        state.spawnCd = 0.6 + hash(state.queue.length, 1, 5) * 0.8;
+      }
+      for (const t of state.active) {
+        t.age += dt;
+        if (t.kind === "moving") t.x += t.dir * SHOOT.movingSpeed * dt;
+      }
+      state.active = state.active.filter((t) => t.age < t.ttl);
+
+      if ((!state.queue.length && !state.active.length) || (state.ammo <= 0 && state.collected < state.totalItems)) finishRound();
+    }
+
+    function drawBullseye(x, y, r) {
+      for (const [ratio, color] of [[1, "#dc2626"], [0.72, "#f8fafc"], [0.45, "#dc2626"], [0.2, "#fde047"]]) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, r * ratio, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawShooter() {
+      // Suelo de la galeria
+      for (let x = 0; x < W; x++) drawTexture(textures.tops[Math.floor(hash(x, 1, 7) * 4)], x, H - 1);
+
+      for (const t of state.active) {
+        const x = toViewX(t.x);
+        const y = toViewY(t.y);
+        const pop = Math.min(1, t.age / 0.14);
+        // Parpadea justo antes de desaparecer para avisar.
+        if (t.kind !== "moving" && t.ttl - t.age < 0.4 && Math.floor(time * 16) % 2) continue;
+        if (t.kind === "target") {
+          ctx.fillStyle = "#7c4a1e";
+          ctx.fillRect(x - T * 0.07, y, T * 0.14, T * 1.05);
+          drawBullseye(x, y, T * 0.8 * pop);
+        } else {
+          const name = t.kind === "bomb" ? "bomb" : t.kind === "bonus" ? itemSprite : t.sprite;
+          const size = T * 1.2 * pop;
+          if (t.kind === "bomb") {
+            // Aureola de aviso: la bomba debe verse sobre cualquier fondo.
+            ctx.fillStyle = "rgba(249,115,22,0.55)";
+            ctx.beginPath();
+            ctx.arc(x, y, T * 0.78 * pop, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.drawImage(SPRITES[name], x - size / 2, y - size / 2, size, size);
+        }
+      }
+
+      if (bossAlive() && !(state.boss.flash > 0 && Math.floor(time * 20) % 2)) {
+        const size = T * 2.6;
+        ctx.drawImage(SPRITES[bossSprite], toViewX(state.boss.x) - size / 2, toViewY(state.boss.y) - size / 2, size, size);
+      }
+
+      ctx.textAlign = "center";
+      ctx.font = "bold 20px monospace";
+      for (const fx of state.effects) {
+        ctx.globalAlpha = Math.min(1, fx.life * 2);
+        ctx.strokeStyle = fx.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, (0.5 - fx.life) * 44 + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        if (fx.text) {
+          ctx.fillStyle = fx.color;
+          ctx.fillText(fx.text, fx.x, fx.y - 34 + fx.life * 30);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = "left";
+
+      // Mira
+      const { x: ax, y: ay } = state.aim;
+      for (const [color, width] of [["rgba(0,0,0,0.75)", 5], ["#ffffff", 2]]) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.arc(ax, ay, 16, 0, Math.PI * 2);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          ctx.moveTo(ax + dx * 9, ay + dy * 9);
+          ctx.lineTo(ax + dx * 24, ay + dy * 24);
+        }
+        ctx.stroke();
+      }
     }
 
     // -------------------------------------------------------------- platformer
@@ -618,12 +1232,15 @@
       state.invuln = Math.max(0, state.invuln - dt);
       state.flash = Math.max(0, state.flash - dt);
       if (platformer) updatePlatformer(dt);
-      else updateTopDown(dt);
+      else if (shooter) updateShooter(dt);
+      else if (arcade) updateArcade(dt);
+      else updateFree(dt);
     }
 
     // ------------------------------------------------------------------ render
     function playerPos() {
       const p = state.player;
+      if (shooter) return { x: (W * T) / 2, y: (H * T) / 2 };
       return platformer ? { x: (p.x + p.w / 2) * T, y: (p.y + p.h / 2) * T } : { x: (p.x + 0.5) * T, y: (p.y + 0.5) * T };
     }
 
@@ -632,8 +1249,17 @@
       const mapW = W * T;
       const mapH = H * T;
       const fit = (pos, view, size) => (size <= view ? (size - view) / 2 : Math.min(size - view, Math.max(0, pos - view / 2)));
-      camera.x = fit(target.x, VIEW_W, mapW);
-      camera.y = fit(target.y, VIEW_H, mapH);
+      const x = fit(target.x, VIEW_W, mapW);
+      const y = arcade ? -Math.max(HUD_H, (VIEW_H - mapH) / 2) : fit(target.y, VIEW_H, mapH);
+      if (!cameraReady || options.manual) {
+        camera.x = x;
+        camera.y = y;
+        cameraReady = true;
+      } else {
+        const k = 1 - Math.exp(-10 * frameDt);
+        camera.x += (x - camera.x) * k;
+        camera.y += (y - camera.y) * k;
+      }
     }
 
     function drawSprite(name, x, y, w, h, flip) {
@@ -656,7 +1282,7 @@
 
     function drawBackground() {
       const pal = level.palette;
-      if (platformer) {
+      if (platformer || shooter) {
         const gradient = ctx.createLinearGradient(0, 0, 0, VIEW_H);
         gradient.addColorStop(0, pal.sky[0]);
         gradient.addColorStop(1, pal.sky[1]);
@@ -680,12 +1306,82 @@
           }
         }
       } else {
-        ctx.fillStyle = shade(pal.wall, -0.35);
+        ctx.fillStyle = arcade ? shade(pal.wall, -0.85) : shade(pal.wall, -0.35);
         ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       }
     }
 
+    // Tablero arcade: paredes como tubos de neon. Se dibuja una vez y luego solo se copia.
+    function buildArcadeBoard() {
+      const canvasBoard = document.createElement("canvas");
+      canvasBoard.width = W * T;
+      canvasBoard.height = H * T;
+      const g = canvasBoard.getContext("2d");
+      const isWall = (x, y) => y >= 0 && y < H && x >= 0 && x < W && grid[y][x] === "wall";
+      const neon = shade(level.palette.wall, 0.45);
+
+      const paint = (inset) => {
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            if (!isWall(x, y)) continue;
+            const i = T * inset;
+            g.fillRect(x * T + i, y * T + i, T - 2 * i, T - 2 * i);
+            if (isWall(x + 1, y)) g.fillRect(x * T + T - i, y * T + i, 2 * i, T - 2 * i);
+            if (isWall(x, y + 1)) g.fillRect(x * T + i, y * T + T - i, T - 2 * i, 2 * i);
+            if (isWall(x + 1, y) && isWall(x, y + 1) && isWall(x + 1, y + 1)) g.fillRect(x * T + T - i, y * T + T - i, 2 * i, 2 * i);
+          }
+        }
+      };
+
+      g.shadowColor = neon;
+      g.shadowBlur = T * 0.35;
+      g.fillStyle = neon;
+      paint(0.14);
+      g.shadowBlur = 0;
+      g.fillStyle = shade(level.palette.wall, -0.75);
+      paint(0.24);
+      return canvasBoard;
+    }
+
+    function drawArcadeBoard() {
+      ctx.drawImage(board, Math.round(-camera.x), Math.round(-camera.y));
+      const sx = (x) => Math.round(x * T - camera.x);
+      const sy = (y) => Math.round(y * T - camera.y);
+
+      for (const key of state.items) {
+        const [x, y] = key.split(",").map(Number);
+        if (itemSprite === "coin") {
+          ctx.fillStyle = "#ffe9a8";
+          ctx.beginPath();
+          ctx.arc(sx(x) + T / 2, sy(y) + T / 2, Math.max(2, T * 0.11), 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.drawImage(SPRITES[itemSprite], sx(x) + T * 0.22, sy(y) + T * 0.22, T * 0.56, T * 0.56);
+        }
+      }
+
+      const pulse = 0.26 + Math.sin(time * 6) * 0.05;
+      for (const key of state.powers) {
+        const [x, y] = key.split(",").map(Number);
+        ctx.fillStyle = "#ff7ad9";
+        ctx.shadowColor = "#ff7ad9";
+        ctx.shadowBlur = T * 0.5;
+        ctx.beginPath();
+        ctx.arc(sx(x) + T / 2, sy(y) + T / 2, T * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
     function drawTiles() {
+      if (shooter) {
+        drawShooter();
+        return;
+      }
+      if (arcade) {
+        drawArcadeBoard();
+        return;
+      }
       const x0 = Math.max(0, Math.floor(camera.x / T));
       const x1 = Math.min(W - 1, Math.floor((camera.x + VIEW_W) / T));
       const y0 = Math.max(0, Math.floor(camera.y / T));
@@ -732,6 +1428,7 @@
     }
 
     function drawEntities() {
+      if (shooter) return;
       const p = state.player;
       if (platformer) {
         for (const e of state.enemies) if (e.alive) drawSprite(e.sprite, (e.x - 0.05) * T, (e.y - 0.1) * T, T * 0.9, T * 0.9, e.dir > 0);
@@ -740,14 +1437,44 @@
           if (!blink(b.invuln)) drawSprite(bossSprite, (b.x - 0.05) * T, (b.y - 0.05) * T, T * 2, T * 2, b.dir > 0);
         }
         if (!blink(state.invuln)) drawSprite("player", (p.x - 0.1) * T, (p.y - 0.05) * T, T * 0.9, T * 0.95, p.facing < 0);
+      } else if (arcade) {
+        const chaserSprite = (e, normal) => {
+          if (e.mode === "eaten") return "eyes";
+          if (!frightened(e)) return normal;
+          return state.fright > 0 && state.fright < 1.5 && Math.floor(time * 6) % 2 ? "scaredFlash" : "scared";
+        };
+        for (const e of state.enemies) drawSprite(chaserSprite(e, e.sprite), e.x * T, e.y * T, T, T, e.dir.x < 0);
+        if (bossAlive()) {
+          const b = state.boss;
+          drawSprite(chaserSprite(b, bossSprite), b.x * T - T * 0.2, b.y * T - T * 0.2, T * 1.4, T * 1.4, b.dir.x < 0);
+        }
+        if (!blink(state.invuln)) drawSprite("player", p.x * T, p.y * T, T, T, p.facing < 0);
       } else {
+        for (const t of p.trail) {
+          ctx.globalAlpha = (t.life / 0.2) * 0.45;
+          drawSprite("player", t.x * T, t.y * T, T, T, p.dir.x < 0);
+        }
+        ctx.globalAlpha = 1;
         for (const e of state.enemies) {
-          if (e.alive && !(e.flash > 0 && Math.floor(time * 20) % 2)) drawSprite(e.sprite, e.x * T, e.y * T, T, T);
+          if (e.alive && !(e.flash > 0 && Math.floor(time * 20) % 2)) drawSprite(e.sprite, e.x * T, e.y * T, T, T, e.target && e.target.x < e.x);
         }
         if (bossAlive() && !(state.boss.flash > 0 && Math.floor(time * 20) % 2)) {
           drawSprite(bossSprite, state.boss.x * T - T * 0.15, state.boss.y * T - T * 0.15, T * 1.3, T * 1.3);
         }
-        if (!blink(state.invuln)) drawSprite("player", p.x * T, p.y * T, T, T, p.dir.x < 0);
+        const bob = p.moving ? Math.abs(Math.sin(time * 14)) * T * 0.07 : 0;
+        if (!blink(state.invuln)) drawSprite("player", p.x * T, p.y * T - bob, T, T, p.dir.x < 0);
+        if (p.swing > 0) {
+          const cx = (p.x + 0.5) * T - camera.x;
+          const cy = (p.y + 0.5) * T - camera.y;
+          const angle = Math.atan2(p.dir.y, p.dir.x);
+          ctx.strokeStyle = "rgba(255,255,255," + (0.4 + p.swing * 4) + ")";
+          ctx.lineWidth = T * 0.16;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.arc(cx, cy, ATTACK_RANGE * T * 0.72, angle - 1, angle + 1);
+          ctx.stroke();
+          ctx.lineCap = "butt";
+        }
       }
     }
 
@@ -755,11 +1482,13 @@
       ctx.font = "bold 22px monospace";
       ctx.textBaseline = "top";
       ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(8, 8, 300, 34);
+      ctx.fillRect(8, 8, shooter ? 460 : 300, 34);
       ctx.fillStyle = "#ff5252";
       ctx.fillText("♥".repeat(state.hp) + "♡".repeat(Math.max(0, maxHp - state.hp)), 16, 13);
       ctx.fillStyle = "#ffd700";
-      if (state.totalItems > 0) {
+      if (shooter) {
+        ctx.fillText(state.collected + "/" + state.totalItems + " · " + state.ammo + " balas · " + state.score, 110, 13);
+      } else if (state.totalItems > 0) {
         ctx.drawImage(SPRITES[itemSprite], 128, 13, 22, 22);
         ctx.fillText(state.collected + "/" + state.totalItems + "  " + state.score + "pts", 156, 13);
       } else {
@@ -768,7 +1497,7 @@
 
       if (bossAlive()) {
         const width = 260;
-        const ratio = state.boss.hp / bossMaxHp;
+        const ratio = state.boss.hp / (shooter ? SHOOT.bossHp : bossMaxHp);
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.fillRect(VIEW_W - width - 24, 8, width + 16, 34);
         ctx.fillStyle = "#7e22ce";
@@ -815,12 +1544,13 @@
       keys.add(code);
       if (platformer) {
         if (["ArrowUp", "KeyW", "Space"].includes(code)) state.player.jumpBuf = 0.12;
-      } else {
-        if (DIRS[code]) {
-          dirStack.push(DIRS[code]);
-          state.player.moveCd = Math.min(state.player.moveCd, 0);
-        }
-        if (code === "Space" && state.status === "playing") tdAttack();
+      } else if (shooter) {
+        if (code === "Space") shoot();
+      } else if (arcade) {
+        if (DIRS[code]) state.player.want = { x: DIRS[code][0], y: DIRS[code][1] };
+      } else if (state.status === "playing") {
+        if (code === "Space") attack();
+        if (code === "ShiftLeft" || code === "ShiftRight") dash();
       }
     }
 
@@ -846,6 +1576,24 @@
       handleUp(event.code);
     }
 
+    // El lienzo se muestra escalado: convierte el puntero a coordenadas internas.
+    function aimAtPointer(event) {
+      const rect = canvas.getBoundingClientRect();
+      state.aim.x = ((event.clientX - rect.left) / rect.width) * VIEW_W;
+      state.aim.y = ((event.clientY - rect.top) / rect.height) * VIEW_H;
+    }
+
+    function onPointerMove(event) {
+      aimAtPointer(event);
+    }
+
+    function onPointerDown(event) {
+      event.preventDefault();
+      canvas.focus();
+      aimAtPointer(event);
+      shoot();
+    }
+
     function onBlur() {
       keys.clear();
       dirStack.length = 0;
@@ -854,6 +1602,7 @@
     function frame(now) {
       const dt = Math.min(0.05, (now - lastFrame) / 1000 || 0);
       lastFrame = now;
+      frameDt = dt;
       update(dt);
       render();
       rafId = requestAnimationFrame(frame);
@@ -864,6 +1613,11 @@
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
       window.addEventListener("blur", onBlur);
+      if (shooter) {
+        canvas.addEventListener("pointermove", onPointerMove);
+        canvas.addEventListener("pointerdown", onPointerDown);
+        canvas.style.cursor = "none";
+      }
       rafId = requestAnimationFrame(frame);
     } else {
       render();
@@ -876,6 +1630,9 @@
         window.removeEventListener("keydown", onKeyDown);
         window.removeEventListener("keyup", onKeyUp);
         window.removeEventListener("blur", onBlur);
+        canvas.removeEventListener("pointermove", onPointerMove);
+        canvas.removeEventListener("pointerdown", onPointerDown);
+        canvas.style.cursor = "";
       },
       // API para pruebas automatizadas
       step(dt) {
