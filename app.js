@@ -111,9 +111,11 @@
 
   const EXAMPLES = [
     { tag: "Plataformas", text: "mapa tipo Mario Bros con trampas, diseño pixelado y jefe final" },
+    { tag: "Arcade", text: "arcade retro tipo pacman en el espacio con fantasmas" },
+    { tag: "Cuevas", text: "cuevas de lava con murciélagos y un dragón como jefe final" },
     { tag: "Laberinto", text: "un laberinto de hielo con trampas" },
     { tag: "Mazmorra", text: "mazmorra con salas, 5 trampas, muchos enemigos y jefe final, difícil" },
-    { tag: "Espacio", text: "plataformas en el espacio con monedas, difícil" },
+    { tag: "Tiro", text: "tiro al blanco en el bosque con bombas y jefe final" },
   ];
 
   const input = $("description");
@@ -188,9 +190,13 @@
 
       $("image").src = level.imageUrl;
       $("ascii").textContent = level.ascii;
-      $("hint").textContent = level.layout === "platformer"
+      $("hint").textContent = level.layout === "shooter"
+        ? "Apuntar: mouse o flechas · Disparar: clic o Espacio · En las dianas, cuanto más al centro, más puntos · No dispares a las bombas · R reinicia"
+        : level.layout === "platformer"
         ? "Mover: flechas o A/D · Saltar: ↑ / W / Espacio (mantén para saltar más alto) · Pisa a los enemigos y al jefe desde arriba · R reinicia"
-        : "Mover: flechas o WASD · Atacar: caminar contra un enemigo o Espacio · Las trampas y enemigos quitan vida · R reinicia";
+        : level.layout === "arcade"
+          ? "Mover: flechas o WASD (sigues avanzando solo) · Recógelo todo · Las esferas rosas te permiten atrapar a quienes te persiguen · Los bordes abiertos te llevan al otro lado · R reinicia"
+          : "Mover: flechas o WASD en cualquier dirección · Atacar: Espacio · Impulso: Shift · Las trampas y los enemigos quitan vida · R reinicia";
 
       $("result").hidden = false;
       setResultActions(true);
