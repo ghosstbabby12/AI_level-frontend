@@ -1684,9 +1684,17 @@ window.LevelGame = { modes: {} };
       else state.aim = point;
     }
 
+    function onPointerUp() {
+      if (mode && mode.onPointerUp) mode.onPointerUp();
+    }
+
     function onPointerDown(event) {
       event.preventDefault();
       canvas.focus();
+      // Seguir el dedo aunque salga del lienzo mientras arrastra.
+      if (canvas.setPointerCapture && event.pointerId !== undefined) {
+        try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+      }
       const point = pointerPoint(event);
       if (mode) {
         mode.onPointer(point.x, point.y, true);
@@ -1718,7 +1726,10 @@ window.LevelGame = { modes: {} };
       if (shooter || (mode && mode.onPointer)) {
         canvas.addEventListener("pointermove", onPointerMove);
         canvas.addEventListener("pointerdown", onPointerDown);
-        canvas.style.cursor = "none";
+        canvas.addEventListener("pointerup", onPointerUp);
+        canvas.addEventListener("pointercancel", onPointerUp);
+        canvas.style.touchAction = "none";
+        if (shooter) canvas.style.cursor = "none";
       }
       rafId = requestAnimationFrame(frame);
     } else {
@@ -1734,7 +1745,10 @@ window.LevelGame = { modes: {} };
         window.removeEventListener("blur", onBlur);
         canvas.removeEventListener("pointermove", onPointerMove);
         canvas.removeEventListener("pointerdown", onPointerDown);
+        canvas.removeEventListener("pointerup", onPointerUp);
+        canvas.removeEventListener("pointercancel", onPointerUp);
         canvas.style.cursor = "";
+        canvas.style.touchAction = "";
       },
       // API para pruebas automatizadas
       step(dt) {

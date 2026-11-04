@@ -58,7 +58,10 @@ window.LevelGame.modes.invaders = {
       onPointer(x, _y, pressed) {
         const s = kit.state;
         s.x = Math.max(0.5, Math.min(W - 0.5, (x - ox) / T));
-        s.firing = pressed || s.firing;
+        if (pressed) s.firing = true;
+      },
+      onPointerUp() {
+        kit.state.firing = false;
       },
       update(dt) {
         const s = kit.state;
