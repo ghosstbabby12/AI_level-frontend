@@ -1,3 +1,5 @@
+window.LevelGame = { modes: {} };
+
 (function () {
   "use strict";
 
@@ -234,8 +236,10 @@
     const platformer = level.layout === "platformer";
     const arcade = level.layout === "arcade";
     const shooter = level.layout === "shooter";
+    const survival = level.layout === "survival";
+    const modeDef = window.LevelGame.modes[level.layout] || null;
     // Arcade: el tablero entero cabe en pantalla, dejando sitio al marcador.
-    const T = platformer ? Math.floor(VIEW_H / H) : arcade ? Math.floor(Math.min(VIEW_W / W, (VIEW_H - HUD_H) / H)) : shooter ? Math.floor(Math.min(VIEW_W / W, VIEW_H / H)) : 36;
+    const T = platformer ? Math.floor(VIEW_H / H) : arcade ? Math.floor(Math.min(VIEW_W / W, (VIEW_H - HUD_H) / H)) : shooter ? Math.floor(Math.min(VIEW_W / W, VIEW_H / H)) : modeDef ? modeDef.tile(W, H, VIEW_W, VIEW_H) : 36;
     const textures = makeTextures(level);
     const maxHp = { easy: 5, normal: 4, hard: 3 }[level.difficulty] || 4;
     const bossMaxHp = platformer
@@ -253,6 +257,19 @@
     let cameraReady = false;
     let frameDt = 0;
     const board = arcade ? buildArcadeBoard() : null;
+    const mode = modeDef
+      ? modeDef.create({
+          ctx, canvas, level, grid, W, H, T, VIEW_W, VIEW_H, HUD_H, kinds, itemSprite, enemySprite, bossSprite,
+          sprites: SPRITES, hash, shade, textures, camera, say, hurt, win,
+          cellAt: (x, y) => cellAt(x, y),
+          held: (...codes) => codes.some((code) => keys.has(code)),
+          drawTexture: (tile, x, y) => drawTexture(tile, x, y),
+          drawSprite: (name, x, y, w, h, flip) => drawSprite(name, x, y, w, h, flip),
+          mixedEnemy: (x, y) => MIXED_ENEMIES[Math.floor(hash(x, y, 3) * MIXED_ENEMIES.length)],
+          get state() { return state; },
+          get time() { return time; },
+        })
+      : null;
     let banner = { text: "", ttl: 0 };
 
     const cellAt = (x, y) => (y >= 0 && y < H && x >= 0 && x < W ? grid[y][x] : "wall");
@@ -271,16 +288,25 @@
         resetShooter();
         return;
       }
+      if (mode) {
+        state = mode.reset();
+        cameraReady = false;
+        return;
+      }
       const start = findCell("start");
       const items = new Set();
       const powers = new Set();
       const enemies = [];
+      const spawnPoints = [];
+      let bossCell = null;
       let boss = null;
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const cell = grid[y][x];
           if (cell === "item") items.add(x + "," + y);
           else if (cell === "power") powers.add(x + "," + y);
+          else if (survival && cell === "enemy") spawnPoints.push({ x, y });
+          else if (survival && cell === "boss") bossCell = { x, y };
           else if (cell === "enemy") {
             const sprite = kinds.enemy === "mixed" ? MIXED_ENEMIES[Math.floor(hash(x, y, 3) * MIXED_ENEMIES.length)] : enemySprite;
             enemies.push(
@@ -310,6 +336,13 @@
         powers,
         fright: 0,
         combo: 0,
+        spawnPoints,
+        bossCell,
+        wave: 0,
+        waves: (level.params && level.params.waves) || 5,
+        pending: 0,
+        spawnCd: 1.5,
+        betweenWaves: 1.5,
         enemies,
         boss,
         invuln: 0,
@@ -333,7 +366,9 @@
       dirStack.length = 0;
       jumpPressed = false;
       cameraReady = false;
-      const goal = arcade
+      const goal = survival
+        ? "Resiste " + state.waves + " oleadas"
+        : arcade
         ? state.boss ? "Recógelo todo y atrapa al jefe" : "Recógelo todo sin que te atrapen"
         : state.boss ? "Derrota al jefe y llega a la salida" : "Llega a la salida";
       const title = level.narrative && level.narrative.title;
@@ -364,6 +399,11 @@
       state.items.delete(key);
       state.collected++;
       state.score += 10;
+      if (survival) {
+        state.hp = Math.min(maxHp, state.hp + 1);
+        say("+1 vida", 0.9);
+        return;
+      }
       if (!arcade) say((ITEM_LABEL[itemSprite] || "Objeto") + " " + state.collected + "/" + state.totalItems, 0.9);
     }
 
@@ -495,7 +535,8 @@
         e.stun -= dt;
         return;
       }
-      const speed = (isBoss ? { easy: 1.7, normal: 2.2, hard: 2.8 } : { easy: 1.6, normal: 2.1, hard: 2.7 })[level.difficulty] || 2.1;
+      // En supervivencia cada oleada corre un poco mas.
+      const speed = ((isBoss ? { easy: 1.7, normal: 2.2, hard: 2.8 } : { easy: 1.6, normal: 2.1, hard: 2.7 })[level.difficulty] || 2.1) * (1 + (survival ? state.wave * 0.035 : 0));
 
       if (e.target) {
         const dx = e.target.x - e.x;
@@ -528,7 +569,7 @@
       }
 
       const here = state.dist[e.y][e.x];
-      if (here !== -1 && (isBoss || here <= CHASE_RADIUS)) {
+      if (here !== -1 && (isBoss || survival || here <= CHASE_RADIUS)) {
         const best = options.filter((c) => state.dist[c.y][c.x] !== -1).sort((a, b) => state.dist[a.y][a.x] - state.dist[b.y][b.x])[0];
         if (best && state.dist[best.y][best.x] < here) e.target = best;
         else e.wait = 0.2;
@@ -551,6 +592,47 @@
         p.vx = (d ? dx / d : 0) * 9;
         p.vy = (d ? dy / d : -1) * 9;
       }
+    }
+
+    // Oleadas: cuando no queda nadie, llega la siguiente con mas enemigos.
+    function updateWaves(dt) {
+      if (state.pending > 0) {
+        state.spawnCd -= dt;
+        if (state.spawnCd <= 0) {
+          const p = state.player;
+          const far = state.spawnPoints.filter((c) => Math.abs(c.x - p.x) + Math.abs(c.y - p.y) > 5);
+          const pool = far.length ? far : state.spawnPoints;
+          const free = pool.filter((c) => !state.enemies.some((e) => e.alive && Math.round(e.x) === c.x && Math.round(e.y) === c.y));
+          if (free.length) {
+            const c = free[Math.floor(Math.random() * free.length)];
+            const sprite = kinds.enemy === "mixed" ? MIXED_ENEMIES[Math.floor(Math.random() * MIXED_ENEMIES.length)] : enemySprite;
+            state.enemies.push({ x: c.x, y: c.y, hp: 1, target: null, wait: 0.2, stun: 0, flash: 0, alive: true, sprite });
+            state.pending--;
+          }
+          state.spawnCd = { easy: 0.8, normal: 0.6, hard: 0.5 }[level.difficulty] || 0.6;
+        }
+        return;
+      }
+      if (state.enemies.some((e) => e.alive) || bossAlive()) return;
+      state.enemies = [];
+
+      if (state.wave >= state.waves) {
+        if (state.bossCell && !state.boss) {
+          state.boss = { x: state.bossCell.x, y: state.bossCell.y, hp: bossMaxHp, target: null, wait: 0.5, stun: 0, flash: 0, alive: true };
+          say("¡Último combate!", 2.5);
+          return;
+        }
+        win();
+        return;
+      }
+
+      state.betweenWaves -= dt;
+      if (state.betweenWaves > 0) return;
+      state.wave++;
+      state.betweenWaves = 2;
+      state.pending = Math.round(2 + state.wave * ({ easy: 1, normal: 1.5, hard: 1.7 }[level.difficulty] || 1.5));
+      state.spawnCd = 0.3;
+      say("Oleada " + state.wave + " de " + state.waves, 1.6);
     }
 
     function updateFree(dt) {
@@ -601,6 +683,7 @@
         stepChaser(state.boss, true, dt);
         touchDamage(state.boss, 0.95, "¡El jefe te golpea!");
       }
+      if (survival && state.status === "playing") updateWaves(dt);
     }
 
     // Modo arcade: todos se mueven sobre rieles de casilla en casilla, sin detenerse.
@@ -1232,6 +1315,7 @@
       state.invuln = Math.max(0, state.invuln - dt);
       state.flash = Math.max(0, state.flash - dt);
       if (platformer) updatePlatformer(dt);
+      else if (mode) mode.update(dt);
       else if (shooter) updateShooter(dt);
       else if (arcade) updateArcade(dt);
       else updateFree(dt);
@@ -1240,6 +1324,7 @@
     // ------------------------------------------------------------------ render
     function playerPos() {
       const p = state.player;
+      if (mode) return mode.focus ? mode.focus() : { x: (W * T) / 2, y: (H * T) / 2 };
       if (shooter) return { x: (W * T) / 2, y: (H * T) / 2 };
       return platformer ? { x: (p.x + p.w / 2) * T, y: (p.y + p.h / 2) * T } : { x: (p.x + 0.5) * T, y: (p.y + 0.5) * T };
     }
@@ -1281,6 +1366,7 @@
     }
 
     function drawBackground() {
+      if (mode) return;
       const pal = level.palette;
       if (platformer || shooter) {
         const gradient = ctx.createLinearGradient(0, 0, 0, VIEW_H);
@@ -1374,6 +1460,10 @@
     }
 
     function drawTiles() {
+      if (mode) {
+        mode.draw();
+        return;
+      }
       if (shooter) {
         drawShooter();
         return;
@@ -1428,7 +1518,7 @@
     }
 
     function drawEntities() {
-      if (shooter) return;
+      if (shooter || mode) return;
       const p = state.player;
       if (platformer) {
         for (const e of state.enemies) if (e.alive) drawSprite(e.sprite, (e.x - 0.05) * T, (e.y - 0.1) * T, T * 0.9, T * 0.9, e.dir > 0);
@@ -1482,11 +1572,15 @@
       ctx.font = "bold 22px monospace";
       ctx.textBaseline = "top";
       ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(8, 8, shooter ? 460 : 300, 34);
+      ctx.fillRect(8, 8, shooter ? 460 : mode || survival ? 520 : 300, 34);
       ctx.fillStyle = "#ff5252";
-      ctx.fillText("♥".repeat(state.hp) + "♡".repeat(Math.max(0, maxHp - state.hp)), 16, 13);
+      if (!(mode && mode.noHearts)) ctx.fillText("♥".repeat(state.hp) + "♡".repeat(Math.max(0, maxHp - state.hp)), 16, 13);
       ctx.fillStyle = "#ffd700";
-      if (shooter) {
+      if (mode) {
+        ctx.fillText(mode.hud(), mode.noHearts ? 16 : 110, 13);
+      } else if (survival) {
+        ctx.fillText("Oleada " + Math.min(state.wave, state.waves) + "/" + state.waves + " · " + state.score + "pts", 130, 13);
+      } else if (shooter) {
         ctx.fillText(state.collected + "/" + state.totalItems + " · " + state.ammo + " balas · " + state.score, 110, 13);
       } else if (state.totalItems > 0) {
         ctx.drawImage(SPRITES[itemSprite], 128, 13, 22, 22);
@@ -1497,7 +1591,7 @@
 
       if (bossAlive()) {
         const width = 260;
-        const ratio = state.boss.hp / (shooter ? SHOOT.bossHp : bossMaxHp);
+        const ratio = state.boss.hp / (state.boss.maxHp || (shooter ? SHOOT.bossHp : bossMaxHp));
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.fillRect(VIEW_W - width - 24, 8, width + 16, 34);
         ctx.fillStyle = "#7e22ce";
@@ -1544,6 +1638,8 @@
       keys.add(code);
       if (platformer) {
         if (["ArrowUp", "KeyW", "Space"].includes(code)) state.player.jumpBuf = 0.12;
+      } else if (mode) {
+        if (mode.onKey) mode.onKey(code);
       } else if (shooter) {
         if (code === "Space") shoot();
       } else if (arcade) {
@@ -1577,21 +1673,27 @@
     }
 
     // El lienzo se muestra escalado: convierte el puntero a coordenadas internas.
-    function aimAtPointer(event) {
+    function pointerPoint(event) {
       const rect = canvas.getBoundingClientRect();
-      state.aim.x = ((event.clientX - rect.left) / rect.width) * VIEW_W;
-      state.aim.y = ((event.clientY - rect.top) / rect.height) * VIEW_H;
+      return { x: ((event.clientX - rect.left) / rect.width) * VIEW_W, y: ((event.clientY - rect.top) / rect.height) * VIEW_H };
     }
 
     function onPointerMove(event) {
-      aimAtPointer(event);
+      const point = pointerPoint(event);
+      if (mode) mode.onPointer(point.x, point.y, false);
+      else state.aim = point;
     }
 
     function onPointerDown(event) {
       event.preventDefault();
       canvas.focus();
-      aimAtPointer(event);
-      shoot();
+      const point = pointerPoint(event);
+      if (mode) {
+        mode.onPointer(point.x, point.y, true);
+      } else {
+        state.aim = point;
+        shoot();
+      }
     }
 
     function onBlur() {
@@ -1613,7 +1715,7 @@
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
       window.addEventListener("blur", onBlur);
-      if (shooter) {
+      if (shooter || (mode && mode.onPointer)) {
         canvas.addEventListener("pointermove", onPointerMove);
         canvas.addEventListener("pointerdown", onPointerDown);
         canvas.style.cursor = "none";
@@ -1662,5 +1764,5 @@
     };
   }
 
-  window.LevelGame = { create: createGame };
+  window.LevelGame.create = createGame;
 })();
