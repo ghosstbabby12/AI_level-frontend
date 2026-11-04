@@ -56,7 +56,8 @@
     $("app-view").hidden = true;
     $("user-menu").hidden = true;
     $("auth-view").hidden = false;
-    $("auth-email").focus();
+    // En un telefono, enfocar abriria el teclado y taparia la pantalla.
+    if (!window.TouchControls.isTouchDevice()) $("auth-email").focus();
   }
 
   function showApp(user) {
@@ -68,7 +69,7 @@
     $("user-avatar").textContent = user.name.charAt(0).toUpperCase();
     $("user-name").textContent = user.name;
     $("greeting").textContent = `Hola, ${user.name}. ¿Qué nivel quieres jugar hoy?`;
-    $("description").focus();
+    if (!window.TouchControls.isTouchDevice()) $("description").focus();
   }
 
   $("auth-form").addEventListener("submit", async (event) => {
@@ -98,6 +99,7 @@
 
   $("logout").addEventListener("click", async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    window.TouchControls.detach();
     if (game) { game.destroy(); game = null; }
     $("result").hidden = true;
     $("story").hidden = true;
@@ -201,8 +203,12 @@
       setResultActions(true);
       if (game) game.destroy();
       game = window.LevelGame.create(canvas, level);
+      const touchHint = window.TouchControls.attach(game, level, canvas, $("touch-controls"));
+      if (touchHint) $("hint").textContent = touchHint;
       showTab("play");
-      $("story").scrollIntoView({ behavior: "smooth", block: "start" });
+      // En un telefono interesa ver el juego y sus controles; la historia queda justo encima.
+      const onTouch = window.TouchControls.isTouchDevice();
+      (onTouch ? document.querySelector('[data-panel="play"]') : $("story")).scrollIntoView({ behavior: "smooth", block: onTouch ? "center" : "start" });
     } catch (err) {
       errorEl.textContent = err.message;
     } finally {

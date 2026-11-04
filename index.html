@@ -311,6 +311,55 @@
     #image { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 12px; }
     #ascii { font-size: 14px; line-height: 1.1; white-space: pre; margin: 0; }
 
+    /* ---------- Controles tactiles ---------- */
+    .touch-controls {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    }
+    .touch-side { display: flex; align-items: center; gap: 10px; }
+    .touch-side.right { flex-wrap: wrap; justify-content: flex-end; }
+    .touch-btn {
+      min-width: 72px; height: 72px; padding: 0 14px; border-radius: 50%; font-size: 22px; font-weight: 750;
+      color: var(--text); background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+      touch-action: none; -webkit-tap-highlight-color: transparent; transition: transform .08s;
+    }
+    .touch-btn.primary { width: 88px; height: 88px; font-size: 16px; color: var(--on-accent); background: linear-gradient(135deg, var(--grad-1), var(--grad-2)); box-shadow: 0 6px 20px var(--glow); }
+    .touch-btn.small { min-width: 68px; height: 68px; font-size: 14px; }
+    .touch-btn.wide { width: 160px; border-radius: 44px; }
+    .touch-btn.held { transform: scale(.92); filter: brightness(1.25); }
+    .touch-stick {
+      position: relative; width: 132px; height: 132px; border-radius: 50%; touch-action: none;
+      background: var(--glass); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+    }
+    .touch-knob {
+      position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; pointer-events: none;
+      background: linear-gradient(135deg, var(--grad-1), var(--grad-2)); box-shadow: 0 4px 14px var(--glow);
+    }
+    .touch-dpad {
+      display: grid; gap: 6px; grid-template: ". up ." 62px "left . right" 62px ". down ." 62px / 62px 62px 62px;
+    }
+    .touch-dpad .touch-btn { min-width: 0; width: 62px; height: 62px; padding: 0; border-radius: 16px; font-size: 20px; }
+    /* El dock flotante taparia los controles mientras se juega. */
+    .touch-playing .dock { display: none; }
+    .touch-playing main { padding-bottom: 32px; }
+    .touch-playing.with-dock main { padding-left: 16px; }
+    /* En horizontal, el juego se ajusta a la altura y los controles van en los margenes laterales. */
+    @media (orientation: landscape) and (max-height: 520px) {
+      .touch-playing .topbar { position: static; }
+      .touch-playing .panel[data-panel="play"] { position: relative; padding: 6px; }
+      .touch-playing #game { max-width: calc((100vh - 24px) * 1.6); }
+      .touch-playing #hint { display: none; }
+      .touch-playing .touch-controls { position: absolute; inset: 0 10px; margin: 0; pointer-events: none; }
+      .touch-playing .touch-side { flex-direction: column; gap: 8px; pointer-events: none; }
+      .touch-playing .touch-side > * { pointer-events: auto; }
+      .touch-playing .touch-btn { min-width: 62px; height: 62px; }
+      .touch-playing .touch-btn.primary { width: 76px; height: 76px; }
+      .touch-playing .touch-btn.wide { width: 76px; border-radius: 50%; font-size: 13px; }
+      .touch-playing .touch-stick { width: 112px; height: 112px; }
+      .touch-playing .touch-dpad { grid-template: ". up ." 46px "left . right" 46px ". down ." 46px / 46px 46px 46px; gap: 3px; }
+      .touch-playing .touch-dpad .touch-btn { min-width: 0; width: 46px; height: 46px; font-size: 16px; }
+    }
+
     /* ---------- Responsive ---------- */
     @media (max-width: 900px) {
       .topnav { display: none; }
@@ -483,6 +532,7 @@
         </div>
         <div class="panel glass" data-panel="play">
           <canvas id="game" tabindex="0"></canvas>
+          <div class="touch-controls" id="touch-controls" hidden></div>
           <div id="hint"></div>
         </div>
         <div class="panel glass" data-panel="image" hidden><img id="image" alt="Mapa del nivel" /></div>
@@ -508,6 +558,7 @@
   <script src="modes/invaders.js"></script>
   <script src="modes/breakout.js"></script>
   <script src="modes/snake.js"></script>
+  <script src="touch.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
