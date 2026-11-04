@@ -115,6 +115,11 @@
     { tag: "Cuevas", text: "cuevas de lava con murciélagos y un dragón como jefe final" },
     { tag: "Laberinto", text: "un laberinto de hielo con trampas" },
     { tag: "Mazmorra", text: "mazmorra con salas, 5 trampas, muchos enemigos y jefe final, difícil" },
+    { tag: "Supervivencia", text: "sobrevivir a hordas de esqueletos en una cripta con jefe final" },
+    { tag: "Carreras", text: "carreras de autos en el desierto a 3 vueltas" },
+    { tag: "Naves", text: "batalla de naves contra robots invasores" },
+    { tag: "Bloques", text: "rompe bloques en el espacio con explosivos" },
+    { tag: "Serpiente", text: "juego de la serpiente en el bosque comiendo manzanas" },
     { tag: "Tiro", text: "tiro al blanco en el bosque con bombas y jefe final" },
   ];
 
@@ -190,13 +195,7 @@
 
       $("image").src = level.imageUrl;
       $("ascii").textContent = level.ascii;
-      $("hint").textContent = level.layout === "shooter"
-        ? "Apuntar: mouse o flechas · Disparar: clic o Espacio · En las dianas, cuanto más al centro, más puntos · No dispares a las bombas · R reinicia"
-        : level.layout === "platformer"
-        ? "Mover: flechas o A/D · Saltar: ↑ / W / Espacio (mantén para saltar más alto) · Pisa a los enemigos y al jefe desde arriba · R reinicia"
-        : level.layout === "arcade"
-          ? "Mover: flechas o WASD (sigues avanzando solo) · Recógelo todo · Las esferas rosas te permiten atrapar a quienes te persiguen · Los bordes abiertos te llevan al otro lado · R reinicia"
-          : "Mover: flechas o WASD en cualquier dirección · Atacar: Espacio · Impulso: Shift · Las trampas y los enemigos quitan vida · R reinicia";
+      $("hint").textContent = level.controls || "";
 
       $("result").hidden = false;
       setResultActions(true);
