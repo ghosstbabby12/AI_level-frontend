@@ -1572,7 +1572,7 @@ window.LevelGame = { modes: {} };
       ctx.font = "bold 22px monospace";
       ctx.textBaseline = "top";
       ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(8, 8, shooter ? 460 : mode || survival ? 520 : 300, 34);
+      if (!(mode && mode.customHud)) ctx.fillRect(8, 8, shooter ? 460 : mode || survival ? 520 : 300, 34);
       ctx.fillStyle = "#ff5252";
       if (!(mode && mode.noHearts)) ctx.fillText("♥".repeat(state.hp) + "♡".repeat(Math.max(0, maxHp - state.hp)), 16, 13);
       ctx.fillStyle = "#ffd700";
