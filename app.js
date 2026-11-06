@@ -310,7 +310,8 @@
     card.dataset.id = summary.id;
     if (atStart) $("mine-list").prepend(card);
     else $("mine-list").appendChild(card);
-    queueShot(art, () => fetchLevel(summary.id));
+    // Los juegos a medida corren aislados y no se pueden fotografiar: conservan su degradado.
+    if (summary.layout !== "custom") queueShot(art, () => fetchLevel(summary.id));
     renderMineCount();
   }
 
@@ -332,10 +333,32 @@
     if (name === "play") canvas.focus();
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-  $("restart").addEventListener("click", () => { if (game) game.restart(); canvas.focus(); });
+  $("restart").addEventListener("click", () => {
+    if (current && current.layout === "custom") showCustomGame(current);
+    else if (game) { game.restart(); canvas.focus(); }
+  });
   $("regen").addEventListener("click", generate);
 
   let current = null;
+
+  // Politica de seguridad del juego a medida: sin red, sin formularios y sin recursos externos.
+  const CUSTOM_CSP = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; media-src data: blob:; font-src data:; form-action \'none\'">';
+
+  function showCustomGame(level) {
+    const frame = $("custom-frame");
+    canvas.hidden = true;
+    frame.hidden = false;
+    // La politica va antes que el contenido del juego para que rija desde el principio.
+    frame.srcdoc = CUSTOM_CSP + level.html;
+    frame.onload = () => frame.focus();
+  }
+
+  function hideCustomGame() {
+    const frame = $("custom-frame");
+    frame.hidden = true;
+    frame.removeAttribute("srcdoc");
+    canvas.hidden = false;
+  }
 
   function playLevel(level) {
     current = level;
@@ -350,6 +373,9 @@
       $("story-boss").hidden = !story.bossLine;
     }
 
+    $("story-note").textContent = level.adaptationNote || "";
+    $("story-note").hidden = !level.adaptationNote;
+
     $("chips").replaceChildren(...level.interpretation.map((text) => {
       const chip = document.createElement("span");
       chip.className = "chip";
@@ -362,13 +388,24 @@
     $("share").hidden = !saved;
     $("share-label").textContent = "Compartir";
     if (saved && level.imageUrl) $("image").src = level.imageUrl;
-    document.querySelector('[data-tab="image"]').hidden = !saved;
+    const custom = level.layout === "custom";
+    document.querySelector('[data-tab="image"]').hidden = !saved || custom;
+    document.querySelector('[data-tab="ascii"]').hidden = custom;
     $("ascii").textContent = level.ascii || "";
     $("hint").textContent = level.controls || "";
 
     $("result").hidden = false;
     setResultActions(true);
     if (game) game.destroy();
+    game = null;
+    if (custom) {
+      window.TouchControls.detach();
+      showCustomGame(level);
+      showTab("play");
+      $("story").scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    hideCustomGame();
     game = window.LevelGame.create(canvas, level);
     const touchHint = window.TouchControls.attach(game, level, canvas, $("touch-controls"));
     if (touchHint) $("hint").textContent = touchHint;
@@ -393,6 +430,31 @@
     }
   });
 
+  const JOB_POLL_MS = 2500;
+  const JOB_TIMEOUT_MS = 5 * 60_000;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /** El servidor esta escribiendo un juego nuevo: se muestra el progreso y se consulta hasta que termina. */
+  async function waitForJob(pending) {
+    $("progress").hidden = false;
+    $("progress-title").textContent = pending.title ? "Creando «" + pending.title + "»…" : "Creando tu juego a medida…";
+    const started = Date.now();
+    try {
+      while (Date.now() - started < JOB_TIMEOUT_MS) {
+        await wait(JOB_POLL_MS);
+        const res = await fetch("/api/levels/jobs/" + encodeURIComponent(pending.job));
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "No se pudo crear el juego.");
+        if (body.status === "done") return body.level;
+        const seconds = Math.round((Date.now() - started) / 1000);
+        $("progress-text").textContent = "La IA está escribiendo un juego nuevo para ti (" + seconds + " s). Suele tardar uno o dos minutos.";
+      }
+      throw new Error("Está tardando demasiado. Inténtalo de nuevo en un momento.");
+    } finally {
+      $("progress").hidden = true;
+    }
+  }
+
   async function generate() {
     if (!input.value.trim()) { input.focus(); return; }
     errorEl.textContent = "";
@@ -407,9 +469,12 @@
       const level = await res.json();
       if (res.status === 401) { showAuth(); return; }
       if (!res.ok) throw new Error(level.error || "Error al generar el nivel");
+      const ready = res.status === 202 ? await waitForJob(level) : level;
+      if (!ready) return;
+      if (ready !== level) Object.assign(level, ready);
       if (level.saved) {
         levelCache.set(level.id, level);
-        addMineCard({ id: level.id, title: level.narrative.title, label: (level.interpretation[0] || "").replace("Tipo: ", ""), tag: level.tag, createdAt: level.createdAt }, true);
+        addMineCard({ id: level.id, title: level.narrative.title, label: (level.interpretation[0] || "").replace("Tipo: ", ""), tag: level.tag, layout: level.layout, createdAt: level.createdAt }, true);
       }
       playLevel(level);
     } catch (err) {

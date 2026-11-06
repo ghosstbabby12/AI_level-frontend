@@ -272,6 +272,13 @@
     .example:hover .remove, .example:focus-within .remove, .touch-device .example .remove { opacity: 1; }
     .example .remove svg { width: 15px; height: 15px; }
     .section-meta { color: var(--muted); font-size: 14px; font-weight: 600; }
+    .example[data-tag="Libre"] .art { background: linear-gradient(140deg, #fde68a, #f472b6 45%, #6366f1 80%, #0f172a); }
+    .custom-frame { display: block; width: 100%; aspect-ratio: 16 / 10; max-height: calc(100vh - 40px); border: 0; border-radius: 16px; background: #000; }
+    .story-note { margin: 12px 0 0; padding: 10px 14px; border-radius: 14px; font-size: 14px; color: var(--text); background: var(--accent-soft); }
+    .story-note::before { content: "Interpretación: "; font-weight: 750; }
+    .progress { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding: 16px 20px; border-radius: 20px; }
+    .progress .spinner { flex: none; margin: 0; }
+    .progress p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
     .example .text { font-size: 15px; font-weight: 650; line-height: 1.35; padding-right: 48px; text-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
     .example .play {
       position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
@@ -519,12 +526,20 @@
         <button id="submit" type="submit" class="btn btn-primary">Generar</button>
       </form>
       <p id="error" role="alert"></p>
+      <div class="progress glass" id="progress" role="status" aria-live="polite" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <div>
+          <strong id="progress-title">Creando tu juego a medida…</strong>
+          <p id="progress-text">Ningún estilo existente encajaba, así que la IA está escribiendo un juego nuevo. Suele tardar uno o dos minutos.</p>
+        </div>
+      </div>
 
       <article class="story glass" id="story" hidden>
         <span class="story-kicker">✦ Nivel generado</span>
         <h2 id="story-title"></h2>
         <p id="story-text"></p>
         <blockquote id="story-boss" hidden></blockquote>
+        <p class="story-note" id="story-note" hidden></p>
       </article>
       <div id="chips"></div>
       <div id="result" hidden>
@@ -550,6 +565,8 @@
         </div>
         <div class="panel glass" data-panel="play">
           <canvas id="game" tabindex="0"></canvas>
+          <!-- Juegos escritos por la IA: aislados, sin acceso a la sesion ni a la red -->
+          <iframe id="custom-frame" class="custom-frame" sandbox="allow-scripts" title="Juego creado a medida" hidden></iframe>
           <div class="touch-controls" id="touch-controls" hidden></div>
           <div id="hint"></div>
         </div>
