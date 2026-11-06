@@ -70,6 +70,9 @@
     $("user-name").textContent = user.name;
     $("greeting").textContent = `Hola, ${user.name}. ¿Qué nivel quieres jugar hoy?`;
     if (!window.TouchControls.isTouchDevice()) $("description").focus();
+    loadExamples();
+    loadMine();
+    openSharedLevel();
   }
 
   $("auth-form").addEventListener("submit", async (event) => {
@@ -101,6 +104,10 @@
     await fetch("/api/auth/logout", { method: "POST" });
     window.TouchControls.detach();
     if (game) { game.destroy(); game = null; }
+    // Lo del usuario anterior no debe quedar a la vista.
+    $("mine-list").replaceChildren();
+    levelCache.clear();
+    renderMineCount();
     $("result").hidden = true;
     $("story").hidden = true;
     setResultActions(false);
@@ -131,27 +138,192 @@
   const canvas = $("game");
   let game = null;
 
-  for (const example of EXAMPLES) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "example";
-    button.dataset.tag = example.tag;
+  const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>';
+  const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
+
+  /** Tarjeta con aspecto de poster. `meta` es una linea pequena opcional bajo el texto. */
+  function makeCard({ tag, text, meta, onOpen, onRemove }) {
+    const card = document.createElement(onRemove ? "div" : "button");
+    card.className = "example";
+    card.dataset.tag = tag;
+    if (onRemove) {
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); }
+      });
+    } else card.type = "button";
     const art = document.createElement("span");
     art.className = "art";
     art.setAttribute("aria-hidden", "true");
+    const tagEl = document.createElement("span");
+    tagEl.className = "tag";
+    tagEl.textContent = tag;
+    const textEl = document.createElement("span");
+    textEl.className = "text";
+    textEl.textContent = text;
+    if (meta) {
+      const metaEl = document.createElement("span");
+      metaEl.className = "meta";
+      metaEl.textContent = meta;
+      textEl.append(document.createElement("br"), metaEl);
+    }
     const play = document.createElement("span");
     play.className = "play";
     play.setAttribute("aria-hidden", "true");
-    play.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>';
-    const tag = document.createElement("span");
-    tag.className = "tag";
-    tag.textContent = example.tag;
-    const text = document.createElement("span");
-    text.className = "text";
-    text.textContent = example.text;
-    button.append(art, tag, text, play);
-    button.addEventListener("click", () => { input.value = example.text; generate(); });
-    $("examples").appendChild(button);
+    play.innerHTML = PLAY_ICON;
+    card.append(art, tagEl, textEl, play);
+    card.addEventListener("click", onOpen);
+    if (onRemove) {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove";
+      remove.setAttribute("aria-label", "Borrar " + text);
+      remove.innerHTML = TRASH_ICON;
+      remove.addEventListener("click", (event) => { event.stopPropagation(); onRemove(card); });
+      remove.addEventListener("keydown", (event) => event.stopPropagation());
+      card.appendChild(remove);
+    }
+    return { card, art };
+  }
+
+  // Capturas: se juega el nivel unos segundos fuera de pantalla y se fotografia.
+  // Van de una en una y en ratos libres, para no trabar la pagina.
+  const shotCanvas = document.createElement("canvas");
+  const thumb = document.createElement("canvas");
+  thumb.width = 320;
+  thumb.height = 200;
+  const shotQueue = [];
+  let shooting = false;
+  const PREVIEW_INPUT = { racing: "ArrowUp", platformer: "ArrowRight", arcade: "ArrowLeft" };
+  const PREVIEW_SECONDS = 4.2;
+  const IDLE_LIMIT = 150;
+
+  function capture(level) {
+    const preview = window.LevelGame.create(shotCanvas, level, { manual: true });
+    try {
+      if (PREVIEW_INPUT[level.layout]) preview.press(PREVIEW_INPUT[level.layout]);
+      for (let i = 0; i < PREVIEW_SECONDS * 60; i++) preview.step(1 / 60);
+      preview.render();
+      const g = thumb.getContext("2d");
+      g.imageSmoothingEnabled = true;
+      g.drawImage(shotCanvas, 0, 0, thumb.width, thumb.height);
+      return thumb.toDataURL("image/jpeg", 0.82);
+    } finally {
+      preview.destroy();
+    }
+  }
+
+  function queueShot(art, getLevel) {
+    shotQueue.push({ art, getLevel });
+    if (!shooting) nextShot();
+  }
+
+  function nextShot() {
+    const job = shotQueue.shift();
+    if (!job) { shooting = false; return; }
+    shooting = true;
+    // Se espera un rato libre, pero sin pasar de IDLE_LIMIT: con un juego en marcha casi nunca lo hay.
+    const idle = window.requestIdleCallback ? (fn) => requestIdleCallback(fn, { timeout: IDLE_LIMIT }) : (fn) => setTimeout(fn, 30);
+    idle(async () => {
+      try {
+        if (job.art.isConnected) {
+          const level = await job.getLevel();
+          if (level) {
+            job.art.style.backgroundImage = "url(" + capture(level) + ")";
+            job.art.classList.add("shot");
+          }
+        }
+      } catch (_) {
+        // Sin captura la tarjeta conserva su degradado.
+      }
+      nextShot();
+    });
+  }
+
+  /** La API envia la cuadricula de los ejemplos compacta: una cadena por fila. */
+  const CELL = { "#": "wall", ".": "floor", S: "start", E: "exit", "^": "trap", M: "enemy", $: "item", B: "boss", P: "power" };
+  const unpack = (level) => (level.grid || !level.rows ? level : { ...level, grid: level.rows.map((row) => [...row].map((c) => CELL[c])) });
+
+  async function loadExamples() {
+    let list;
+    try {
+      const res = await fetch("/api/levels/examples");
+      if (!res.ok) throw new Error();
+      list = (await res.json()).map((e) => ({ ...e, level: unpack(e.level) }));
+    } catch (_) {
+      list = EXAMPLES;
+    }
+    $("examples").replaceChildren();
+    for (const example of list) {
+      // Con el nivel ya generado se juega al instante y sin gastar IA; si no, se genera.
+      const open = example.level
+        ? () => { input.value = example.text; playLevel(example.level); }
+        : () => { input.value = example.text; generate(); };
+      const { card, art } = makeCard({ tag: example.tag, text: example.text, onOpen: open });
+      $("examples").appendChild(card);
+      if (example.level) queueShot(art, async () => example.level);
+    }
+  }
+
+  /* ---------- Mis juegos ---------- */
+
+  const DATE = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const levelCache = new Map();
+
+  async function fetchLevel(id) {
+    if (levelCache.has(id)) return levelCache.get(id);
+    const res = await fetch("/api/levels/" + encodeURIComponent(id));
+    if (!res.ok) return null;
+    const level = await res.json();
+    levelCache.set(id, level);
+    return level;
+  }
+
+  function renderMineCount() {
+    const n = $("mine-list").children.length;
+    $("mine-section").hidden = n === 0;
+    $("nav-mine").hidden = n === 0;
+    $("mine-count").textContent = n === 1 ? "1 juego" : n + " juegos";
+  }
+
+  function addMineCard(summary, atStart) {
+    const { card, art } = makeCard({
+      tag: summary.tag || summary.label,
+      text: summary.title,
+      meta: (summary.label || "") + " · " + DATE.format(new Date(summary.createdAt)),
+      onOpen: async () => {
+        const level = await fetchLevel(summary.id);
+        if (level) { input.value = level.description; playLevel(level); }
+        else errorEl.textContent = "No se pudo abrir ese juego.";
+      },
+      onRemove: async (el) => {
+        if (!confirm("¿Borrar «" + summary.title + "»? No se puede deshacer.")) return;
+        const res = await fetch("/api/levels/" + encodeURIComponent(summary.id), { method: "DELETE" });
+        if (res.ok || res.status === 404) {
+          el.remove();
+          levelCache.delete(summary.id);
+          renderMineCount();
+        }
+      },
+    });
+    card.dataset.id = summary.id;
+    if (atStart) $("mine-list").prepend(card);
+    else $("mine-list").appendChild(card);
+    queueShot(art, () => fetchLevel(summary.id));
+    renderMineCount();
+  }
+
+  async function loadMine() {
+    $("mine-list").replaceChildren();
+    try {
+      const res = await fetch("/api/levels/mine");
+      if (!res.ok) throw new Error();
+      for (const summary of await res.json()) addMineCard(summary, false);
+    } catch (_) {
+      // Sin la lista se puede seguir creando y jugando.
+    }
+    renderMineCount();
   }
 
   function showTab(name) {
@@ -162,6 +334,64 @@
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
   $("restart").addEventListener("click", () => { if (game) game.restart(); canvas.focus(); });
   $("regen").addEventListener("click", generate);
+
+  let current = null;
+
+  function playLevel(level) {
+    current = level;
+    errorEl.textContent = "";
+    // Titulo, historia y frase del jefe (niveles de un backend antiguo pueden no traerla).
+    const story = level.narrative;
+    $("story").hidden = !story;
+    if (story) {
+      $("story-title").textContent = story.title;
+      $("story-text").textContent = story.story;
+      $("story-boss").textContent = story.bossLine ? `«${story.bossLine}»` : "";
+      $("story-boss").hidden = !story.bossLine;
+    }
+
+    $("chips").replaceChildren(...level.interpretation.map((text) => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = text;
+      return chip;
+    }));
+
+    // Los ejemplos no estan guardados: no tienen imagen ni enlace propio.
+    const saved = !String(level.id).startsWith("ejemplo-");
+    $("share").hidden = !saved;
+    $("share-label").textContent = "Compartir";
+    if (saved && level.imageUrl) $("image").src = level.imageUrl;
+    document.querySelector('[data-tab="image"]').hidden = !saved;
+    $("ascii").textContent = level.ascii || "";
+    $("hint").textContent = level.controls || "";
+
+    $("result").hidden = false;
+    setResultActions(true);
+    if (game) game.destroy();
+    game = window.LevelGame.create(canvas, level);
+    const touchHint = window.TouchControls.attach(game, level, canvas, $("touch-controls"));
+    if (touchHint) $("hint").textContent = touchHint;
+    showTab("play");
+    // En un telefono interesa ver el juego y sus controles; la historia queda justo encima.
+    const onTouch = window.TouchControls.isTouchDevice();
+    (onTouch ? document.querySelector('[data-panel="play"]') : $("story")).scrollIntoView({ behavior: "smooth", block: onTouch ? "center" : "start" });
+  }
+
+  $("share").addEventListener("click", async () => {
+    if (!current) return;
+    const url = location.origin + location.pathname + "?nivel=" + encodeURIComponent(current.id);
+    try {
+      if (navigator.share && window.TouchControls.isTouchDevice()) await navigator.share({ title: current.narrative.title, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        $("share-label").textContent = "¡Enlace copiado!";
+        setTimeout(() => ($("share-label").textContent = "Compartir"), 2000);
+      }
+    } catch (_) {
+      prompt("Copia este enlace:", url);
+    }
+  });
 
   async function generate() {
     if (!input.value.trim()) { input.focus(); return; }
@@ -177,38 +407,11 @@
       const level = await res.json();
       if (res.status === 401) { showAuth(); return; }
       if (!res.ok) throw new Error(level.error || "Error al generar el nivel");
-
-      // Titulo, historia y frase del jefe (niveles de un backend antiguo pueden no traerla).
-      const story = level.narrative;
-      $("story").hidden = !story;
-      if (story) {
-        $("story-title").textContent = story.title;
-        $("story-text").textContent = story.story;
-        $("story-boss").textContent = story.bossLine ? `«${story.bossLine}»` : "";
-        $("story-boss").hidden = !story.bossLine;
+      if (level.saved) {
+        levelCache.set(level.id, level);
+        addMineCard({ id: level.id, title: level.narrative.title, label: (level.interpretation[0] || "").replace("Tipo: ", ""), tag: level.tag, createdAt: level.createdAt }, true);
       }
-
-      $("chips").replaceChildren(...level.interpretation.map((text) => {
-        const chip = document.createElement("span");
-        chip.className = "chip";
-        chip.textContent = text;
-        return chip;
-      }));
-
-      $("image").src = level.imageUrl;
-      $("ascii").textContent = level.ascii;
-      $("hint").textContent = level.controls || "";
-
-      $("result").hidden = false;
-      setResultActions(true);
-      if (game) game.destroy();
-      game = window.LevelGame.create(canvas, level);
-      const touchHint = window.TouchControls.attach(game, level, canvas, $("touch-controls"));
-      if (touchHint) $("hint").textContent = touchHint;
-      showTab("play");
-      // En un telefono interesa ver el juego y sus controles; la historia queda justo encima.
-      const onTouch = window.TouchControls.isTouchDevice();
-      (onTouch ? document.querySelector('[data-panel="play"]') : $("story")).scrollIntoView({ behavior: "smooth", block: onTouch ? "center" : "start" });
+      playLevel(level);
     } catch (err) {
       errorEl.textContent = err.message;
     } finally {
@@ -238,6 +441,7 @@
   const SPY = [
     { el: $("create"), dock: "create", nav: "#create" },
     { el: $("result"), dock: "result", nav: "#create" },
+    { el: $("mine"), dock: "intro", nav: "#mine" },
     { el: $("intro"), dock: "intro", nav: "#intro" },
     { el: $("how"), dock: "intro", nav: "#how" },
   ];
@@ -256,6 +460,16 @@
     if (!spyQueued) { spyQueued = true; requestAnimationFrame(updateSpy); }
   }, { passive: true });
   updateSpy();
+
+  // Un enlace ?nivel=<id> abre ese juego en cuanto hay sesion.
+  async function openSharedLevel() {
+    const id = new URLSearchParams(location.search).get("nivel");
+    if (!id) return;
+    history.replaceState(null, "", location.pathname);
+    const level = await fetchLevel(id);
+    if (level) playLevel(level);
+    else errorEl.textContent = "Ese juego ya no existe o el enlace está incompleto.";
+  }
 
   /* ---------- Arranque ---------- */
 

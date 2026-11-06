@@ -32,8 +32,8 @@ window.TouchControls = (function () {
     snake: { dpad: true, swipe: true, hint: "Desliza el dedo sobre el juego o usa la cruceta para girar · No choques" },
     racing: {
       pad: [LEFT, RIGHT],
-      buttons: [{ label: "Freno", code: "ArrowDown", small: true }, { label: "Gas", code: "ArrowUp", primary: true }],
-      hint: "Mantén Gas para acelerar y gira con las flechas · Las franjas naranjas dan turbo",
+      buttons: [{ label: "Objeto", code: "Space", small: true }, { label: "Freno", code: "ArrowDown", small: true }, { label: "Gas", code: "ArrowUp", primary: true }],
+      hint: "Mantén Gas para acelerar y gira con las flechas · Las cajas dan objetos: úsalos con Objeto",
     },
     invaders: {
       buttons: [{ label: "Disparar", code: "Space", primary: true, wide: true }],
@@ -44,6 +44,9 @@ window.TouchControls = (function () {
   };
 
   let detach = null;
+
+  // Permite al CSS mostrar lo que en escritorio aparece al pasar el raton.
+  if (isTouchDevice()) document.documentElement.classList.add("touch-device");
 
   function isTouchDevice() {
     if (/[?&]touch=1\b/.test(location.search)) return true;

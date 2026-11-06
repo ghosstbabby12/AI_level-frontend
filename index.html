@@ -259,6 +259,19 @@
       position: absolute; top: 14px; left: 14px; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700;
       background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     }
+    /* Captura real del juego como fondo de la tarjeta */
+    .example .art.shot { background-size: cover; background-position: center; image-rendering: pixelated; }
+    .example .art.shot::before { display: none; }
+    .example .art.shot::after { background: linear-gradient(to top, rgba(8, 10, 24, .88), rgba(8, 10, 24, .1) 60%); }
+    .example .meta { font-size: 12px; font-weight: 600; opacity: .8; }
+    .example .remove {
+      position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+      color: #fff; background: rgba(15, 23, 42, .45); border: 1px solid rgba(255, 255, 255, .35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      opacity: 0; transition: opacity .15s;
+    }
+    .example:hover .remove, .example:focus-within .remove, .touch-device .example .remove { opacity: 1; }
+    .example .remove svg { width: 15px; height: 15px; }
+    .section-meta { color: var(--muted); font-size: 14px; font-weight: 600; }
     .example .text { font-size: 15px; font-weight: 650; line-height: 1.35; padding-right: 48px; text-shadow: 0 1px 6px rgba(0, 0, 0, .35); }
     .example .play {
       position: absolute; right: 14px; bottom: 14px; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
@@ -407,6 +420,7 @@
 
     <nav class="topnav" id="top-nav" hidden aria-label="Secciones">
       <a href="#create" class="active">Crear</a>
+      <a href="#mine" id="nav-mine" hidden>Mis juegos</a>
       <a href="#intro">Ejemplos</a>
       <a href="#how">Cómo funciona</a>
     </nav>
@@ -521,6 +535,10 @@
             <button type="button" data-tab="ascii">Mapa</button>
           </div>
           <span class="spacer"></span>
+          <button type="button" class="btn btn-glass btn-sm" id="share" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+            <span id="share-label">Compartir</span>
+          </button>
           <button type="button" class="btn btn-glass btn-sm" id="restart">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>
             Reiniciar (R)
@@ -540,6 +558,14 @@
       </div>
 
       <div id="intro">
+        <div id="mine-section" hidden>
+          <div class="section-head" id="mine">
+            <h2 class="section-title">Mis juegos</h2>
+            <span class="section-meta" id="mine-count"></span>
+          </div>
+          <div class="examples" id="mine-list"></div>
+        </div>
+
         <div class="section-head"><h2 class="section-title">Prueba con un ejemplo</h2></div>
         <div class="examples" id="examples"></div>
 
