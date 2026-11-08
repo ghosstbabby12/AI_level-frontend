@@ -376,7 +376,7 @@
     $("story-note").textContent = level.adaptationNote || "";
     $("story-note").hidden = !level.adaptationNote;
 
-    $("chips").replaceChildren(...level.interpretation.map((text) => {
+    $("chips").replaceChildren(...(level.interpretation || []).map((text) => {
       const chip = document.createElement("span");
       chip.className = "chip";
       chip.textContent = text;
@@ -469,12 +469,14 @@
       const level = await res.json();
       if (res.status === 401) { showAuth(); return; }
       if (!res.ok) throw new Error(level.error || "Error al generar el nivel");
-      const ready = res.status === 202 ? await waitForJob(level) : level;
+      // Un juego a medida en proceso se reconoce por el campo job, no por el 202: un proxy
+      // puede cambiar el codigo y entonces se trataria la respuesta como un nivel terminado.
+      const ready = level.job ? await waitForJob(level) : level;
       if (!ready) return;
       if (ready !== level) Object.assign(level, ready);
       if (level.saved) {
         levelCache.set(level.id, level);
-        addMineCard({ id: level.id, title: level.narrative.title, label: (level.interpretation[0] || "").replace("Tipo: ", ""), tag: level.tag, layout: level.layout, createdAt: level.createdAt }, true);
+        addMineCard({ id: level.id, title: level.narrative.title, label: ((level.interpretation || [])[0] || "").replace("Tipo: ", ""), tag: level.tag, layout: level.layout, createdAt: level.createdAt }, true);
       }
       playLevel(level);
     } catch (err) {
