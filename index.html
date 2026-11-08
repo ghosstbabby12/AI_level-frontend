@@ -15,8 +15,8 @@
     /* ================= Tokens ================= */
     :root {
       --bg: #f3f4f9;
-      --glow-1: rgba(106, 76, 255, .14);
-      --glow-2: rgba(255, 77, 109, .09);
+      --glow-1: rgba(120, 132, 156, .14);
+      --glow-2: rgba(160, 170, 190, .1);
       --surface: #ffffff;
       --surface-2: #f6f7fb;
       --surface-3: #eceef5;
@@ -26,46 +26,60 @@
       --text: #131722;
       --muted: #5b6377;
       --faint: #8a91a4;
-      --accent: #6a4cff;
-      --accent-2: #c04cfd;
-      --accent-ink: #5537ee;
-      --accent-soft: rgba(106, 76, 255, .1);
-      --glow: rgba(106, 76, 255, .28);
-      --hot: #ff4d6d;
+      --accent: #1c1e24;
+      --accent-2: #4b5262;
+      --accent-ink: #22252d;
+      --accent-soft: rgba(28, 30, 36, .07);
+      --glow: rgba(20, 24, 34, .2);
+      --cool: #3b82c4;
+      --hot: #e5484d;
+      /* Botones flotantes: foco de luz, elevacion en reposo y al pasar, y borde iluminado */
+      --spot: rgba(28, 30, 36, .07);
+      --lift: inset 0 1px 0 rgba(255, 255, 255, .9), 0 1px 2px rgba(16, 24, 40, .06), 0 4px 12px -4px rgba(16, 24, 40, .14);
+      --lift-hover: inset 0 1px 0 rgba(255, 255, 255, .9), 0 2px 4px rgba(16, 24, 40, .06), 0 12px 26px -8px rgba(16, 24, 40, .28);
+      --edge: #b6bcc9;
       --success: #0f9f58;
       --danger: #d92d4a;
       --on-accent: #ffffff;
       --field: #ffffff;
       --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .07);
       --shadow-lg: 0 18px 48px rgba(24, 28, 70, .14);
-      --streak-1: #7c5cff; --streak-2: #ff6b8b; --streak-3: #38bdf8; --streak-4: #f8b84e;
+      --streak-1: #94a3b8; --streak-2: #cbd5e1; --streak-3: #7dd3fc; --streak-4: #e2e8f0;
       --auth-glass: rgba(255, 255, 255, .58);
       --auth-border: rgba(255, 255, 255, .75);
       color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        --bg: #0a0c12; --glow-1: rgba(124, 92, 255, .2); --glow-2: rgba(255, 77, 109, .1);
+        --bg: #0a0b0e; --glow-1: rgba(150, 170, 210, .1); --glow-2: rgba(255, 255, 255, .04);
         --surface: #11141c; --surface-2: #161a24; --surface-3: #1e2331; --overlay: rgba(17, 20, 28, .8);
         --border: rgba(255, 255, 255, .07); --border-strong: rgba(255, 255, 255, .13);
         --text: #eceef6; --muted: #9097ab; --faint: #677086;
-        --accent: #8b74ff; --accent-2: #d26bff; --accent-ink: #a99aff; --accent-soft: rgba(139, 116, 255, .14); --glow: rgba(139, 116, 255, .38);
-        --hot: #ff5c7a; --success: #34d399; --danger: #ff6b81; --field: #0d1017;
+        --accent: #eceef3; --accent-2: #a3acbd; --accent-ink: #dde1e9; --accent-soft: rgba(255, 255, 255, .07); --glow: rgba(190, 205, 235, .22); --cool: #7cc4ff;
+        --hot: #ef5a6f; --success: #34d399; --danger: #ff6b81; --field: #0c0d11; --on-accent: #0c0d11;
+      --spot: rgba(255, 255, 255, .1);
+      --lift: inset 0 1px 0 rgba(255, 255, 255, .07), 0 1px 2px rgba(0, 0, 0, .5), 0 6px 16px -6px rgba(0, 0, 0, .65);
+      --lift-hover: inset 0 1px 0 rgba(255, 255, 255, .1), 0 16px 32px -10px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .04);
+      --edge: rgba(255, 255, 255, .24);
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45); --shadow-lg: 0 18px 48px rgba(0, 0, 0, .55);
-        --streak-1: #6d4dff; --streak-2: #ff3d71; --streak-3: #22d3ee; --streak-4: #f59e0b;
+        --streak-1: #475569; --streak-2: #94a3b8; --streak-3: #38bdf8; --streak-4: #cbd5e1;
         --auth-glass: rgba(18, 20, 32, .5); --auth-border: rgba(255, 255, 255, .16);
         color-scheme: dark;
       }
     }
     :root[data-theme="dark"] {
-      --bg: #0a0c12; --glow-1: rgba(124, 92, 255, .2); --glow-2: rgba(255, 77, 109, .1);
+      --bg: #0a0b0e; --glow-1: rgba(150, 170, 210, .1); --glow-2: rgba(255, 255, 255, .04);
       --surface: #11141c; --surface-2: #161a24; --surface-3: #1e2331; --overlay: rgba(17, 20, 28, .8);
       --border: rgba(255, 255, 255, .07); --border-strong: rgba(255, 255, 255, .13);
       --text: #eceef6; --muted: #9097ab; --faint: #677086;
-      --accent: #8b74ff; --accent-2: #d26bff; --accent-ink: #a99aff; --accent-soft: rgba(139, 116, 255, .14); --glow: rgba(139, 116, 255, .38);
-      --hot: #ff5c7a; --success: #34d399; --danger: #ff6b81; --field: #0d1017;
+      --accent: #eceef3; --accent-2: #a3acbd; --accent-ink: #dde1e9; --accent-soft: rgba(255, 255, 255, .07); --glow: rgba(190, 205, 235, .22); --cool: #7cc4ff;
+      --hot: #ef5a6f; --success: #34d399; --danger: #ff6b81; --field: #0c0d11; --on-accent: #0c0d11;
+      --spot: rgba(255, 255, 255, .1);
+      --lift: inset 0 1px 0 rgba(255, 255, 255, .07), 0 1px 2px rgba(0, 0, 0, .5), 0 6px 16px -6px rgba(0, 0, 0, .65);
+      --lift-hover: inset 0 1px 0 rgba(255, 255, 255, .1), 0 16px 32px -10px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .04);
+      --edge: rgba(255, 255, 255, .24);
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45); --shadow-lg: 0 18px 48px rgba(0, 0, 0, .55);
-      --streak-1: #6d4dff; --streak-2: #ff3d71; --streak-3: #22d3ee; --streak-4: #f59e0b;
+      --streak-1: #475569; --streak-2: #94a3b8; --streak-3: #38bdf8; --streak-4: #cbd5e1;
       --auth-glass: rgba(18, 20, 32, .5); --auth-border: rgba(255, 255, 255, .16);
       color-scheme: dark;
     }
@@ -88,29 +102,78 @@
     button { cursor: pointer; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     a { color: inherit; }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
     [hidden] { display: none !important; }
     svg { flex: none; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
     /* ================= Botones ================= */
+    /* Todos los controles "flotan": brillo en el borde superior, sombra proyectada y un foco
+       de luz que sigue al puntero (--mx/--my los pone app.js). Al pulsar se hunden y dejan una onda. */
     .btn {
+      --mx: 50%; --my: 50%;
+      position: relative; isolation: isolate; overflow: hidden;
       display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
-      padding: 10px 18px; border-radius: 12px; border: 1px solid transparent; font-weight: 650; font-size: 14px;
-      transition: transform .16s, box-shadow .16s, background .16s, border-color .16s;
+      padding: 10px 18px; border-radius: 12px; border: 1px solid var(--border-strong); font-weight: 650; font-size: 14px;
+      background: radial-gradient(150px circle at var(--mx) var(--my), var(--spot), transparent 70%), var(--surface);
+      box-shadow: var(--lift);
+      transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s, border-color .2s;
     }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--lift-hover); border-color: var(--edge); }
+    .btn:active:not(:disabled) { transform: translateY(0) scale(.97); box-shadow: var(--lift); transition-duration: .06s; }
     .btn svg { width: 17px; height: 17px; }
-    .btn-primary { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 18px var(--glow); }
-    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px var(--glow); }
-    .btn-ghost { background: var(--surface); border-color: var(--border); }
-    .btn-ghost:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
+    /* Principal: cromado neutro con un destello que lo cruza al pasar el raton */
+    .btn-primary {
+      color: var(--on-accent); border-color: transparent;
+      background: radial-gradient(150px circle at var(--mx) var(--my), rgba(255, 255, 255, .32), transparent 70%), linear-gradient(180deg, var(--accent), var(--accent-2));
+      box-shadow: var(--lift), inset 0 1px 0 rgba(255, 255, 255, .35);
+    }
+    .btn-primary::after {
+      content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+      background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .5) 50%, transparent 65%);
+      transform: translateX(-120%); transition: transform .75s ease;
+    }
+    .btn-primary:hover:not(:disabled)::after { transform: translateX(120%); }
+    .btn-primary:hover:not(:disabled) { border-color: transparent; box-shadow: var(--lift-hover), inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 26px var(--glow); }
     .btn-sm { padding: 7px 13px; font-size: 13px; border-radius: 10px; }
     .icon-btn {
+      --mx: 50%; --my: 50%;
       position: relative; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
-      border: 1px solid var(--border); background: var(--surface); color: var(--muted); transition: color .16s, border-color .16s, background .16s;
+      border: 1px solid var(--border-strong); color: var(--muted); box-shadow: var(--lift);
+      background: radial-gradient(90px circle at var(--mx) var(--my), var(--spot), transparent 70%), var(--surface);
+      transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s, border-color .2s, color .2s;
     }
-    .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
-    .icon-btn svg { width: 19px; height: 19px; }
+    .icon-btn:hover { color: var(--text); transform: translateY(-2px); box-shadow: var(--lift-hover); border-color: var(--edge); }
+    .icon-btn:active { transform: scale(.93); transition-duration: .06s; }
+    .icon-btn svg { width: 19px; height: 19px; transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+    .icon-btn:hover svg { transform: scale(1.1) rotate(-6deg); }
+    #theme-toggle:hover svg { transform: rotate(40deg) scale(1.1); }
+
+    /* Onda al pulsar */
+    .ripple { position: absolute; z-index: -1; border-radius: 50%; pointer-events: none; background: currentColor; opacity: .22; transform: scale(0); animation: ripple .6s ease-out forwards; }
+    @keyframes ripple { to { transform: scale(1); opacity: 0; } }
+
+    /* Boton flotante de accion: "Nuevo juego" fijo abajo a la derecha */
+    .fab {
+      --mx: 50%; --my: 50%;
+      position: fixed; right: 28px; bottom: 28px; z-index: 30; display: inline-flex; align-items: center; gap: 10px;
+      height: 56px; padding: 0 22px 0 18px; border-radius: 18px; border: 1px solid var(--edge); font-weight: 700; font-size: 15px;
+      color: var(--on-accent); isolation: isolate; overflow: hidden;
+      background: radial-gradient(160px circle at var(--mx) var(--my), rgba(255, 255, 255, .35), transparent 70%), linear-gradient(180deg, var(--accent), var(--accent-2));
+      box-shadow: var(--lift-hover), inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 0 6px color-mix(in srgb, var(--bg) 60%, transparent);
+      animation: float 4s ease-in-out infinite; transition: transform .2s, box-shadow .2s;
+    }
+    .fab svg { width: 22px; height: 22px; transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+    .fab:hover { animation-play-state: paused; transform: translateY(-4px) scale(1.03); box-shadow: var(--lift-hover), inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 34px var(--glow); }
+    .fab:hover svg { transform: rotate(90deg); }
+    .fab:active { transform: scale(.96); }
+    .fab::after {
+      content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+      background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .5) 50%, transparent 65%);
+      transform: translateX(-120%); animation: sheen 5s ease-in-out infinite 1.5s;
+    }
+    @keyframes float { 50% { transform: translateY(-5px); } }
+    @keyframes sheen { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
     .icon-btn.sm { width: 34px; height: 34px; border-radius: 10px; }
     .icon-btn.sm svg { width: 17px; height: 17px; }
     .count {
@@ -261,7 +324,7 @@
     .auth-grid { width: 100%; max-width: 1100px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; align-items: center; }
     .eyebrow { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; margin-bottom: 18px; font-size: 13px; font-weight: 650; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
     .pitch h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.02; margin: 0 0 18px; letter-spacing: -.035em; }
-    .gradient-text { background: linear-gradient(110deg, var(--accent), var(--accent-2) 55%, var(--hot)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .gradient-text { background: linear-gradient(110deg, var(--accent), var(--accent-2) 55%, var(--cool)); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .pitch > p { color: var(--muted); font-size: 18px; margin: 0 0 28px; max-width: 46ch; }
     .pitch ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
     .pitch li { display: flex; gap: 12px; align-items: center; color: var(--muted); }
@@ -532,6 +595,32 @@
       .touch-playing .touch-dpad .touch-btn { min-width: 0; width: 46px; height: 46px; font-size: 16px; }
     }
 
+    /* ================= Efectos compartidos de los controles ================= */
+    /* Foco de luz al pasar el raton y pequena elevacion, tambien en chips, pestanas y menus. */
+    .genre, .tabs button, .user-btn, .switch button, .choice button, .tip, .nav a, .nav button, .jobs-pill, .segmented button {
+      --mx: 50%; --my: 50%; position: relative; isolation: isolate; overflow: hidden;
+    }
+    .genre:hover, .tabs button:hover, .user-btn:hover, .switch button:hover, .choice button:hover, .tip:hover,
+    .nav a:not(.active):hover, .nav button:hover, .jobs-pill:hover, .segmented button:hover {
+      background-image: radial-gradient(110px circle at var(--mx) var(--my), var(--spot), transparent 70%);
+    }
+    .genre, .user-btn, .tip { box-shadow: var(--lift); transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s, border-color .2s, color .2s; }
+    .genre:hover, .user-btn:hover, .tip:hover { transform: translateY(-2px); box-shadow: var(--lift-hover); border-color: var(--edge); }
+    .genre:active, .tip:active { transform: scale(.96); transition-duration: .06s; }
+    .genre svg { transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+    .genre:hover svg { transform: scale(1.15) rotate(-6deg); }
+    .genre { flex: none; }
+    /* Genero activo: borde iluminado y un punto de luz frio, como un indicador encendido */
+    .genre[aria-pressed="true"] { color: var(--text); border-color: var(--edge); background: var(--surface-2); box-shadow: var(--lift-hover), 0 0 0 3px var(--accent-soft); }
+    .genre[aria-pressed="true"] svg { color: var(--cool); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cool) 60%, transparent)); }
+    .nav a.active { color: var(--on-accent); background: linear-gradient(180deg, var(--accent), var(--accent-2)); box-shadow: var(--lift-hover), inset 0 1px 0 rgba(255, 255, 255, .3); }
+    .nav a svg, .nav button svg { transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+    .nav a:hover svg, .nav button:hover svg { transform: translateX(2px) scale(1.08); }
+    .avatar { background: linear-gradient(180deg, var(--accent), var(--accent-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); }
+    .item { box-shadow: var(--lift); }
+    .item:hover { border-color: var(--edge); }
+    .toasts { bottom: 100px; }
+
     /* ================= Responsive ================= */
     @media (max-width: 1100px) {
       .featured { grid-auto-columns: 78%; }
@@ -552,6 +641,8 @@
       .nav .label { display: none; }
       .nav .badge { position: absolute; top: 3px; right: 3px; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; }
       .touch-playing .sidebar { display: none; }
+      .fab { display: none; }
+      .toasts { bottom: 20px; }
       main { padding: 22px 18px 110px; }
       .topbar { padding: 12px 18px; }
       .user-name, .user-btn > svg { display: none; }
@@ -590,7 +681,7 @@
     <aside class="sidebar" id="sidebar" hidden>
       <a class="brand" href="#crear" aria-label="Artificial Levels, inicio">
         <svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true">
-          <defs><linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6a4cff" /><stop offset="1" stop-color="#ff4d6d" /></linearGradient></defs>
+          <defs><linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a4150" /><stop offset="1" stop-color="#8fa3bd" /></linearGradient></defs>
           <rect width="8" height="8" rx="2" fill="url(#brand-grad)" />
           <rect x="1" y="1" width="2" height="2" fill="#fff" /><rect x="5" y="1" width="2" height="2" fill="#fff" opacity=".5" />
           <rect x="3" y="3" width="2" height="2" fill="#fff" /><rect x="1" y="5" width="2" height="2" fill="#fff" opacity=".5" />
@@ -641,7 +732,7 @@
       <header class="topbar">
         <a class="brand" href="#crear" aria-label="Artificial Levels">
           <svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true">
-            <defs><linearGradient id="brand-grad-top" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6a4cff" /><stop offset="1" stop-color="#ff4d6d" /></linearGradient></defs>
+            <defs><linearGradient id="brand-grad-top" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a4150" /><stop offset="1" stop-color="#8fa3bd" /></linearGradient></defs>
             <rect width="8" height="8" rx="2" fill="url(#brand-grad-top)" />
             <rect x="1" y="1" width="2" height="2" fill="#fff" /><rect x="5" y="1" width="2" height="2" fill="#fff" opacity=".5" />
             <rect x="3" y="3" width="2" height="2" fill="#fff" /><rect x="1" y="5" width="2" height="2" fill="#fff" opacity=".5" />
@@ -924,6 +1015,11 @@
       </div>
     </div>
   </dialog>
+
+  <button type="button" class="fab" id="fab" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    Nuevo juego
+  </button>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 

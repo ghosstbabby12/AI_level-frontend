@@ -42,6 +42,34 @@
   systemDark.addEventListener("change", paintTheme);
   paintTheme();
 
+  /* ================= Efectos de los botones ================= */
+
+  // Foco de luz que sigue al puntero: cada control lee --mx/--my en su fondo (ver index.html).
+  const FX = ".btn, .icon-btn, .fab, .genre, .tabs button, .user-btn, .switch button, .choice button, .tip, .nav a, .nav button, .jobs-pill, .segmented button";
+  // Onda al pulsar: solo en los que recortan su contenido (overflow: hidden).
+  const RIPPLE = ".btn, .fab, .genre, .tabs button, .switch button, .choice button, .tip, .nav a, .nav button, .segmented button";
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  document.addEventListener("pointermove", (event) => {
+    const el = event.target.closest && event.target.closest(FX);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", event.clientX - r.left + "px");
+    el.style.setProperty("--my", event.clientY - r.top + "px");
+  }, { passive: true });
+
+  document.addEventListener("pointerdown", (event) => {
+    const el = event.target.closest && event.target.closest(RIPPLE);
+    if (!el || el.disabled || reducedMotion.matches) return;
+    const r = el.getBoundingClientRect();
+    const size = Math.max(r.width, r.height) * 2.2;
+    const wave = document.createElement("span");
+    wave.className = "ripple";
+    wave.style.cssText = `width:${size}px;height:${size}px;left:${event.clientX - r.left - size / 2}px;top:${event.clientY - r.top - size / 2}px`;
+    el.appendChild(wave);
+    wave.addEventListener("animationend", () => wave.remove());
+  }, { passive: true });
+
   /* ================= Menus emergentes ================= */
 
   let openPopover = null;
@@ -607,6 +635,7 @@
   function showView(view) {
     currentView = view;
     $$("[data-panel-view]").forEach((p) => (p.hidden = p.dataset.panelView !== view));
+    updateFab();
     // Las vistas ocultas miden 0 de ancho: al mostrarlas se recalcula el desvanecido.
     $$("[data-genres]").forEach(fadeGenres);
     $$(".nav a[data-view]").forEach((a) => {
@@ -626,6 +655,18 @@
   }
 
   window.addEventListener("popstate", () => showView(VIEW_BY_HASH[location.hash] || "create"));
+
+  /** El boton flotante sobra cuando la caja de pedido ya esta a la vista. */
+  function updateFab() {
+    const promptVisible = currentView === "create" && window.scrollY < 260;
+    $("fab").hidden = !document.body.classList.contains("app-on") || promptVisible;
+  }
+  window.addEventListener("scroll", updateFab, { passive: true });
+  $("fab").addEventListener("click", () => {
+    go("create");
+    input.focus({ preventScroll: true });
+    updateFab();
+  });
   $$("a[href^='#']").forEach((a) => a.addEventListener("click", (event) => {
     const view = VIEW_BY_HASH[a.getAttribute("href")];
     if (!view) return;
@@ -1158,6 +1199,7 @@
     $("search-wrap").hidden = !on;
     $("bell-wrap").hidden = !on;
     $("user-wrap").hidden = !on;
+    updateFab();
   }
 
   function showAuth() {
