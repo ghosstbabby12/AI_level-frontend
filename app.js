@@ -384,7 +384,7 @@
     }));
 
     // Los ejemplos no estan guardados: no tienen imagen ni enlace propio.
-    const saved = !String(level.id).startsWith("ejemplo-");
+    const saved = Boolean(level.id) && !String(level.id).startsWith("ejemplo-");
     $("share").hidden = !saved;
     $("share-label").textContent = "Compartir";
     if (saved && level.imageUrl) $("image").src = level.imageUrl;
