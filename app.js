@@ -214,6 +214,60 @@
     }
   }
 
+  /* Vista previa de un juego a medida: corre aislado y no se puede fotografiar desde fuera.
+     Se carga en un iframe invisible con la misma politica, y un script inyectado copia su
+     lienzo (casi siempre la pantalla de titulo) y lo envia con postMessage. */
+  const SNAP_DELAY_MS = 1500;
+  const SNAP_TIMEOUT_MS = 8000;
+  const SNAP_PREFIX = "data:image/jpeg;base64,";
+  const SNAP_MAX_LENGTH = 400_000;
+  const SNAP_SCRIPT = "<script>addEventListener('load',function(){setTimeout(function(){var r=null;try{" +
+    "var c=[].slice.call(document.querySelectorAll('canvas')).sort(function(a,b){return b.width*b.height-a.width*a.height})[0];" +
+    "if(c&&c.width&&c.height){var t=document.createElement('canvas');t.width=" + thumb.width + ";t.height=" + thumb.height + ";" +
+    "var g=t.getContext('2d');g.fillStyle='#000';g.fillRect(0,0,t.width,t.height);" +
+    "var k=Math.max(t.width/c.width,t.height/c.height),w=c.width*k,h=c.height*k;" +
+    "g.drawImage(c,(t.width-w)/2,(t.height-h)/2,w,h);r=t.toDataURL('image/jpeg',0.82)}}catch(e){}" +
+    "parent.postMessage({snap:r},'*')}," + SNAP_DELAY_MS + ")})<\/script>";
+
+  const snapKey = (id) => "snap:" + id;
+
+  function captureCustom(level) {
+    try {
+      const saved = localStorage.getItem(snapKey(level.id));
+      if (saved) return Promise.resolve(saved);
+    } catch (_) {}
+    if (!level.html) return Promise.resolve(null);
+
+    return new Promise((resolve) => {
+      const frame = document.createElement("iframe");
+      frame.setAttribute("sandbox", "allow-scripts");
+      frame.setAttribute("aria-hidden", "true");
+      frame.tabIndex = -1;
+      // Dentro de la ventana pero invisible: fuera de ella el navegador congela el iframe.
+      frame.style.cssText = "position:fixed;left:0;top:0;width:960px;height:600px;border:0;opacity:0;pointer-events:none;z-index:-1";
+      let timer;
+      const done = (shot) => {
+        clearTimeout(timer);
+        window.removeEventListener("message", onMessage);
+        frame.remove();
+        if (shot) {
+          try { localStorage.setItem(snapKey(level.id), shot); } catch (_) {}
+        }
+        resolve(shot);
+      };
+      // Solo se acepta una imagen JPEG de tamano razonable y de este iframe.
+      function onMessage(event) {
+        if (event.source !== frame.contentWindow) return;
+        const snap = event.data && event.data.snap;
+        done(typeof snap === "string" && snap.startsWith(SNAP_PREFIX) && snap.length < SNAP_MAX_LENGTH ? snap : null);
+      }
+      window.addEventListener("message", onMessage);
+      timer = setTimeout(() => done(null), SNAP_TIMEOUT_MS);
+      frame.srcdoc = withPolicy(level.html, SNAP_SCRIPT);
+      document.body.appendChild(frame);
+    });
+  }
+
   function queueShot(art, getLevel) {
     shotQueue.push({ art, getLevel });
     if (!shooting) nextShot();
@@ -229,8 +283,9 @@
       try {
         if (job.art.isConnected) {
           const level = await job.getLevel();
-          if (level) {
-            job.art.style.backgroundImage = "url(" + capture(level) + ")";
+          const shot = !level ? null : level.layout === "custom" ? await captureCustom(level) : capture(level);
+          if (shot) {
+            job.art.style.backgroundImage = "url(" + shot + ")";
             job.art.classList.add("shot");
           }
         }
@@ -303,6 +358,7 @@
         if (res.ok || res.status === 404) {
           el.remove();
           levelCache.delete(summary.id);
+          try { localStorage.removeItem(snapKey(summary.id)); } catch (_) {}
           renderMineCount();
         }
       },
@@ -310,8 +366,7 @@
     card.dataset.id = summary.id;
     if (atStart) $("mine-list").prepend(card);
     else $("mine-list").appendChild(card);
-    // Los juegos a medida corren aislados y no se pueden fotografiar: conservan su degradado.
-    if (summary.layout !== "custom") queueShot(art, () => fetchLevel(summary.id));
+    queueShot(art, () => fetchLevel(summary.id));
     renderMineCount();
   }
 
@@ -344,12 +399,24 @@
   // Politica de seguridad del juego a medida: sin red, sin formularios y sin recursos externos.
   const CUSTOM_CSP = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; media-src data: blob:; font-src data:; form-action \'none\'">';
 
+  /** Pone la politica (y codigo propio, si hay) al principio del <head>, sin desplazar el doctype. */
+  function withPolicy(html, extra = "") {
+    const head = CUSTOM_CSP + extra;
+    const at = html.search(/<head[^>]*>/i);
+    if (at !== -1) {
+      const end = html.indexOf(">", at) + 1;
+      return html.slice(0, end) + head + html.slice(end);
+    }
+    const doctype = html.match(/^\s*<!doctype[^>]*>/i);
+    return doctype ? doctype[0] + head + html.slice(doctype[0].length) : head + html;
+  }
+
   function showCustomGame(level) {
     const frame = $("custom-frame");
     canvas.hidden = true;
     frame.hidden = false;
     // La politica va antes que el contenido del juego para que rija desde el principio.
-    frame.srcdoc = CUSTOM_CSP + level.html;
+    frame.srcdoc = withPolicy(level.html);
     frame.onload = () => frame.focus();
   }
 
