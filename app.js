@@ -1092,6 +1092,7 @@
     $("hint").textContent = level.controls || "";
 
     $("result").hidden = false;
+    stopWatching();
     if (game) game.destroy();
     game = null;
     if (custom) {
@@ -1102,12 +1103,97 @@
       game = window.LevelGame.create(canvas, level);
       const touchHint = window.TouchControls.attach(game, level, canvas, $("touch-controls"));
       if (touchHint) $("hint").textContent = touchHint;
+      watchGame();
     }
     showTab("play");
     // En un telefono interesa ver el juego y sus controles; la historia queda justo encima.
     const onTouch = window.TouchControls.isTouchDevice();
     (onTouch ? document.querySelector('[data-panel="play"]') : $("story")).scrollIntoView({ behavior: "smooth", block: onTouch ? "center" : "start" });
   }
+
+  /* ================= Game Over ================= */
+
+  // Todos los modos marcan la derrota con state.status = "lost": se vigila desde aqui y la
+  // pantalla sirve para los 11 estilos. Si el jugador reinicia con R, se cierra sola.
+  const GAMEOVER_DELAY_MS = 700;
+  let watchId = 0;
+  let overTimer = 0;
+  let lastStatus = null;
+  let roundStart = 0;
+
+  function hideGameOver() {
+    clearTimeout(overTimer);
+    $("gameover").hidden = true;
+  }
+
+  function stopWatching() {
+    cancelAnimationFrame(watchId);
+    hideGameOver();
+  }
+
+  function watchGame() {
+    stopWatching();
+    lastStatus = "playing";
+    roundStart = performance.now();
+    const tick = () => {
+      if (!game) return;
+      const status = game.state && game.state.status;
+      if (status !== lastStatus) {
+        if (status === "lost") {
+          const elapsed = performance.now() - roundStart;
+          overTimer = setTimeout(() => showGameOver(elapsed), GAMEOVER_DELAY_MS);
+        } else {
+          hideGameOver();
+          if (status === "playing") roundStart = performance.now();
+        }
+        lastStatus = status;
+      }
+      watchId = requestAnimationFrame(tick);
+    };
+    watchId = requestAnimationFrame(tick);
+  }
+
+  /** El aviso del juego explica por que se perdio; se le quita la instruccion final. */
+  function lossReason(state) {
+    let reason = String(game.message || "").replace(/\s*[-–·.]?\s*Pulsa R.*$/i, "").trim();
+    if (!reason || /^has perdido$/i.test(reason)) reason = state.hp === 0 ? "Te quedaste sin vidas." : "Esta vez no pudo ser.";
+    return /[.!?»]$/.test(reason) ? reason : reason + ".";
+  }
+
+  const formatTime = (ms) => {
+    const total = Math.round(ms / 1000);
+    return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
+  };
+
+  function showGameOver(elapsed) {
+    if (!game || !current) return;
+    const state = game.state;
+    const score = Math.max(0, Math.round(state.score || 0));
+    const key = "best:" + (current.id || "ejemplo:" + current.layout);
+    const best = Number(storage.get(key)) || 0;
+    const record = score > best;
+    if (record) storage.set(key, String(score));
+    $("go-reason").textContent = lossReason(state);
+    $("go-score").textContent = score.toLocaleString("es");
+    $("go-time").textContent = formatTime(elapsed);
+    $("go-best").textContent = Math.max(best, score).toLocaleString("es");
+    $("go-record").hidden = !record || score === 0;
+    $("gameover").hidden = false;
+    $("go-retry").focus({ preventScroll: true });
+  }
+
+  $("go-retry").addEventListener("click", () => {
+    if (!game) return;
+    game.restart();
+    hideGameOver();
+    canvas.focus({ preventScroll: true });
+  });
+  $("go-variant").addEventListener("click", () => { hideGameOver(); generate(); });
+  $("go-other").addEventListener("click", () => { hideGameOver(); go(mine.length ? "mine" : "examples"); });
+  $("go-peek").addEventListener("click", () => { hideGameOver(); canvas.focus({ preventScroll: true }); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("gameover").hidden) { hideGameOver(); canvas.focus({ preventScroll: true }); }
+  });
 
   $("restart").addEventListener("click", () => {
     if (current && current.layout === "custom") showCustomGame(current);
@@ -1261,6 +1347,7 @@
     closePopover();
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     window.TouchControls.detach();
+    stopWatching();
     if (game) { game.destroy(); game = null; }
     hideCustomGame();
     // Lo del usuario anterior no debe quedar a la vista.

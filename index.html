@@ -543,6 +543,71 @@
     #image { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 12px; }
     #ascii { font-size: 14px; line-height: 1.1; white-space: pre; margin: 0; }
 
+    /* ---------- Game Over ---------- */
+    .stage { position: relative; max-width: 960px; margin: 0 auto; }
+    .gameover {
+      position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 16px; border-radius: 14px; overflow: hidden;
+      background: radial-gradient(ellipse at center, rgba(10, 11, 16, .55), rgba(5, 6, 10, .9));
+      backdrop-filter: blur(6px) grayscale(.7); -webkit-backdrop-filter: blur(6px) grayscale(.7);
+      animation: go-in .45s ease-out both;
+    }
+    /* Lineas de barrido, como un monitor viejo */
+    .gameover::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .35;
+      background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, .06) 0 1px, transparent 1px 4px);
+      animation: scan 7s linear infinite;
+    }
+    @keyframes go-in { from { opacity: 0; backdrop-filter: blur(0); -webkit-backdrop-filter: blur(0); } }
+    @keyframes scan { to { background-position: 0 100px; } }
+    .go-card {
+      position: relative; width: min(520px, 100%); padding: 28px 28px 18px; border-radius: 22px; text-align: center; color: #eceef3;
+      background: rgba(18, 20, 28, .62); border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .08);
+      animation: go-card-in .55s .1s cubic-bezier(.2, 1.3, .4, 1) both;
+    }
+    @keyframes go-card-in { from { opacity: 0; transform: translateY(18px) scale(.94); } }
+    .go-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #9aa3b5; }
+    /* Titulo con interferencia: dos copias desplazadas que parpadean */
+    .go-title {
+      position: relative; margin: 4px 0 6px; font-size: clamp(38px, 7vw, 64px); line-height: 1; font-weight: 900; letter-spacing: .06em;
+      background: linear-gradient(180deg, #ffffff, #a9b2c3); -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: 0 0 30px rgba(190, 205, 235, .25);
+    }
+    .go-title::before, .go-title::after {
+      content: attr(data-text); position: absolute; inset: 0; -webkit-background-clip: text; background-clip: text; color: transparent; pointer-events: none;
+    }
+    .go-title::before { background: linear-gradient(#7cc4ff, #7cc4ff); -webkit-background-clip: text; background-clip: text; animation: glitch-a 2.6s steps(1) infinite; }
+    .go-title::after { background: linear-gradient(#ef5a6f, #ef5a6f); -webkit-background-clip: text; background-clip: text; animation: glitch-b 2.6s steps(1) infinite; }
+    @keyframes glitch-a { 0%, 86%, 100% { transform: none; clip-path: inset(0 0 100% 0); } 88% { transform: translate(-4px, -1px); clip-path: inset(10% 0 55% 0); } 92% { transform: translate(3px, 1px); clip-path: inset(60% 0 8% 0); } }
+    @keyframes glitch-b { 0%, 86%, 100% { transform: none; clip-path: inset(0 0 100% 0); } 89% { transform: translate(4px, 1px); clip-path: inset(40% 0 30% 0); } 93% { transform: translate(-3px, -1px); clip-path: inset(5% 0 70% 0); } }
+    .go-reason { margin: 0 auto; max-width: 40ch; color: #c3c9d5; font-size: 15px; }
+    .go-record { display: inline-block; margin: 10px 0 0; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 750; color: #0c0d11; background: linear-gradient(180deg, #ffe08a, #f5b94a); box-shadow: 0 0 20px rgba(245, 185, 74, .4); animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 50% { transform: scale(1.06); } }
+    .go-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+    .go-stats div { padding: 10px 6px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
+    .go-stats dt { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #8f98aa; }
+    .go-stats dd { margin: 2px 0 0; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; }
+    .go-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .go-actions .btn:not(.btn-primary) { color: #eceef3; background-color: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .16); }
+    .gameover .btn-primary { --accent: #eceef3; --accent-2: #a3acbd; --on-accent: #0c0d11; }
+    .gameover kbd { color: inherit; background: rgba(0, 0, 0, .15); border-color: rgba(0, 0, 0, .2); box-shadow: none; }
+    .go-peek { margin-top: 12px; color: #9aa3b5; display: inline-flex; align-items: center; gap: 6px; }
+    .go-peek kbd { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .14); color: #c3c9d5; }
+    /* En pantallas chicas el lienzo es bajo: la pantalla ocupa toda la ventana para que quepan los botones. */
+    @media (max-width: 700px), (orientation: landscape) and (max-height: 520px) {
+      .gameover { position: fixed; inset: 0; z-index: 70; border-radius: 0; overflow-y: auto; }
+    }
+    @media (max-width: 600px) {
+      .go-card { padding: 20px 16px 14px; }
+      .go-stats dd { font-size: 18px; }
+      .go-actions .btn { flex: 1 1 100%; }
+    }
+    @media (orientation: landscape) and (max-height: 520px) {
+      .go-card { padding: 12px 16px; }
+      .go-stats { margin: 8px 0; }
+      .go-title { font-size: 34px; }
+    }
+
     /* ---------- Como funciona ---------- */
     .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     .step { padding: 22px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); }
@@ -917,9 +982,41 @@
                 </button>
               </div>
               <div class="panel" data-panel="play">
-                <canvas id="game" tabindex="0"></canvas>
-                <!-- Juegos escritos por la IA: aislados, sin acceso a la sesion ni a la red -->
-                <iframe id="custom-frame" class="custom-frame" sandbox="allow-scripts" title="Juego creado a medida" hidden></iframe>
+                <div class="stage">
+                  <canvas id="game" tabindex="0"></canvas>
+                  <!-- Juegos escritos por la IA: aislados, sin acceso a la sesion ni a la red -->
+                  <iframe id="custom-frame" class="custom-frame" sandbox="allow-scripts" title="Juego creado a medida" hidden></iframe>
+
+                  <!-- Pantalla de Game Over: aparece sobre el juego al perder -->
+                  <div class="gameover" id="gameover" role="dialog" aria-modal="false" aria-labelledby="go-title" hidden>
+                    <div class="go-card">
+                      <p class="go-kicker">Fin de la partida</p>
+                      <h2 class="go-title" id="go-title" data-text="GAME OVER">GAME OVER</h2>
+                      <p class="go-reason" id="go-reason"></p>
+                      <p class="go-record" id="go-record" hidden>★ ¡Nuevo récord!</p>
+                      <dl class="go-stats">
+                        <div><dt>Puntos</dt><dd id="go-score">0</dd></div>
+                        <div><dt>Tiempo</dt><dd id="go-time">0:00</dd></div>
+                        <div><dt>Récord</dt><dd id="go-best">0</dd></div>
+                      </dl>
+                      <div class="go-actions">
+                        <button type="button" class="btn btn-primary" id="go-retry">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>
+                          Reintentar <kbd>R</kbd>
+                        </button>
+                        <button type="button" class="btn" id="go-variant">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>
+                          Otra variante
+                        </button>
+                        <button type="button" class="btn" id="go-other">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+                          Elegir otro juego
+                        </button>
+                      </div>
+                      <button type="button" class="link-btn go-peek" id="go-peek">Ver cómo terminó <kbd>Esc</kbd></button>
+                    </div>
+                  </div>
+                </div>
                 <div class="touch-controls" id="touch-controls" hidden></div>
                 <div id="hint"></div>
               </div>
