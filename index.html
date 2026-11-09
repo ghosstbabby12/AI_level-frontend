@@ -354,6 +354,63 @@
     .form-error { color: var(--danger); font-size: 14px; min-height: 21px; margin: 10px 0 0; }
     .hint-small { color: var(--muted); font-size: 13px; margin: 6px 0 0; text-align: center; }
 
+    /* ================= Perfil ================= */
+    .avatar { overflow: hidden; }
+    .avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .profile-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .profile-card, .form-card { padding: 24px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+    .profile-card { position: sticky; top: 92px; display: grid; justify-items: center; gap: 4px; text-align: center; }
+    .profile-card h2 { margin: 0; font-size: 20px; letter-spacing: -.015em; overflow-wrap: anywhere; }
+    .profile-card .muted { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+    .profile-card .small { font-size: 13px; color: var(--faint); }
+    .profile-photo { position: relative; width: 116px; height: 116px; margin-bottom: 14px; border-radius: 32px; transition: box-shadow .2s, transform .2s; }
+    .profile-photo .avatar { width: 116px; height: 116px; border-radius: 32px; font-size: 46px; box-shadow: var(--lift); }
+    .profile-photo.drop { transform: scale(1.04); box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 6px var(--accent); }
+    .photo-edit { position: absolute; right: -8px; bottom: -8px; width: 40px; height: 40px; border-radius: 13px; }
+    .photo-busy { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 32px; background: rgba(5, 7, 15, .45); }
+    .photo-busy .ring { width: 28px; height: 28px; border-width: 3px; border-color: rgba(255, 255, 255, .3); border-top-color: #fff; }
+    .profile-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin: 16px 0; }
+    .profile-stats div { display: grid; gap: 2px; padding: 12px 8px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+    .profile-stats strong { font-size: 20px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .profile-stats span { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .photo-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .profile-card .field-note { margin-top: 10px; }
+    .profile-forms { display: grid; gap: 20px; min-width: 0; }
+    .form-card h2 { margin: 0; font-size: 18px; letter-spacing: -.015em; }
+    .form-card .lead { margin: 4px 0 20px; color: var(--muted); font-size: 14px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: start; }
+    .form-card .input-wrap input { height: 46px; padding-right: 16px; }
+    .form-card .input-wrap:has(.adorn) input { padding-right: 46px; }
+    .field .optional { color: var(--faint); font-weight: 500; }
+    .field-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+    .field.invalid input { border-color: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent); }
+    .reveal-in:not([hidden]) { animation: pop-in .18s ease-out; }
+    .adorn .slash { display: none; }
+    .adorn[aria-pressed="true"] .slash { display: inline; }
+    .btn-quiet { background: transparent; box-shadow: none; border-color: transparent; color: var(--muted); }
+    .btn-quiet:hover:not(:disabled) { color: var(--text); border-color: var(--border); box-shadow: none; transform: none; }
+    #photo-remove:hover:not(:disabled) { color: var(--danger); }
+    .form-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+    .form-actions .form-error { flex: 1 1 200px; min-height: 0; margin: 0; }
+    .pw-meter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 2px; }
+    .pw-meter i { height: 4px; border-radius: 4px; background: var(--surface-3, var(--border)); transition: background .2s; }
+    .pw-meter[data-score="1"] i:nth-child(-n+1) { background: var(--danger); }
+    .pw-meter[data-score="2"] i:nth-child(-n+2) { background: #e8a33d; }
+    .pw-meter[data-score="3"] i:nth-child(-n+3) { background: var(--cool); }
+    .pw-meter[data-score="4"] i { background: var(--success); }
+    @media (max-width: 900px) {
+      .profile-grid { grid-template-columns: 1fr; }
+      .profile-card { position: static; }
+    }
+    @media (max-width: 600px) {
+      .form-row { grid-template-columns: 1fr; }
+      .profile-card, .form-card { padding: 20px 18px; }
+      .form-actions .btn { flex: 1; }
+      .form-actions .form-error { flex-basis: 100%; }
+      .form-actions .form-error:empty { display: none; }
+      .form-card .input-wrap input { font-size: 16px; }
+    }
+
     /* ================= Vistas ================= */
     .view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
     .view-head h1 { margin: 0; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.1; letter-spacing: -.03em; }
@@ -782,6 +839,10 @@
         <span class="quota-bar" id="quota-card-bar" aria-hidden="true"></span>
       </div>
       <div class="nav nav-bottom">
+        <a href="#perfil" data-view="profile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+          <span class="label">Mi perfil</span>
+        </a>
         <button type="button" id="open-settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
           <span class="label">Ajustes</span>
@@ -842,7 +903,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </button>
             <div class="popover menu" id="user-panel" hidden>
-              <div class="menu-head"><strong id="user-panel-name"></strong><span>Sesión iniciada</span></div>
+              <div class="menu-head"><strong id="user-panel-name"></strong><span id="user-panel-email">Sesión iniciada</span></div>
+              <button type="button" id="open-profile">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                Mi perfil
+              </button>
               <button type="button" data-open-settings>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="7" cy="18" r="2" fill="currentColor"/></svg>
                 Ajustes
@@ -1084,6 +1149,106 @@
             <div class="modes-grid" id="modes-grid"></div>
             <div class="section-head"><h2 class="section-title">¿Y si ningún estilo encaja?</h2></div>
             <div class="step"><strong>Juego libre</strong><span>Si pides algo que ningún estilo juega (ajedrez, cartas, peleas uno contra uno), la IA escribe un juego nuevo para ti. Tarda uno o dos minutos y puedes seguir usando la app mientras tanto: te avisamos cuando esté listo.</span></div>
+
+          </section>
+
+          <!-- ===== Perfil ===== -->
+          <section data-panel-view="profile" hidden>
+            <div class="view-head">
+              <div><h1>Mi perfil</h1><p>Tus datos de cuenta. Solo tú puedes verlos.</p></div>
+            </div>
+            <div class="profile-grid">
+              <aside class="profile-card">
+                <div class="profile-photo" id="profile-photo">
+                  <span class="avatar" id="profile-avatar"></span>
+                  <span class="photo-busy" id="photo-busy" hidden><i class="ring"></i></span>
+                  <button type="button" class="icon-btn photo-edit" id="photo-pick" aria-label="Cambiar foto de perfil">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                  </button>
+                </div>
+                <input type="file" id="photo-input" accept="image/*" hidden />
+                <h2 id="profile-name"></h2>
+                <span class="muted" id="profile-email"></span>
+                <span class="muted small" id="profile-since"></span>
+                <div class="profile-stats">
+                  <div><strong id="stat-saved">0</strong><span>Guardados</span></div>
+                  <div><strong id="stat-custom">0</strong><span>A medida</span></div>
+                </div>
+                <div class="photo-actions">
+                  <button type="button" class="btn btn-sm" id="photo-pick-2">Cambiar foto</button>
+                  <button type="button" class="btn btn-sm btn-quiet" id="photo-remove" hidden>Quitar foto</button>
+                </div>
+                <p class="field-note">JPG, PNG o WebP. Se recorta en cuadrado. También puedes arrastrarla sobre la foto.</p>
+              </aside>
+
+              <div class="profile-forms">
+                <form class="form-card" id="profile-form" novalidate>
+                  <h2>Datos personales</h2>
+                  <p class="lead">Así te saludamos y así entras a tu cuenta.</p>
+                  <div class="form-row">
+                    <div class="field">
+                      <label for="pf-name">Nombre</label>
+                      <div class="input-wrap"><input id="pf-name" type="text" autocomplete="name" maxlength="40" required /></div>
+                    </div>
+                    <div class="field">
+                      <label for="pf-phone">Teléfono <span class="optional">(opcional)</span></label>
+                      <div class="input-wrap"><input id="pf-phone" type="tel" autocomplete="tel" maxlength="25" placeholder="+34 600 123 456" /></div>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="pf-email">Correo</label>
+                    <div class="input-wrap"><input id="pf-email" type="email" autocomplete="email" maxlength="254" required /></div>
+                  </div>
+                  <div class="field reveal-in" id="pf-current-field" hidden>
+                    <label for="pf-current">Contraseña actual</label>
+                    <div class="input-wrap">
+                      <input id="pf-current" type="password" autocomplete="current-password" maxlength="200" />
+                      <button type="button" class="adorn" data-reveal="pf-current" aria-label="Mostrar contraseña" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button>
+                    </div>
+                    <p class="field-note">Para cambiar el correo con el que entras necesitamos confirmar que eres tú.</p>
+                  </div>
+                  <div class="form-actions">
+                    <p class="form-error" id="pf-error" role="alert"></p>
+                    <button type="button" class="btn btn-quiet" id="pf-reset" hidden>Descartar</button>
+                    <button type="submit" class="btn btn-primary" id="pf-save" disabled>Guardar cambios</button>
+                  </div>
+                </form>
+
+                <form class="form-card" id="password-form" novalidate>
+                  <h2>Contraseña</h2>
+                  <p class="lead">Al cambiarla, cerramos tu sesión en los demás dispositivos.</p>
+                  <div class="field">
+                    <label for="pw-current">Contraseña actual</label>
+                    <div class="input-wrap">
+                      <input id="pw-current" type="password" autocomplete="current-password" maxlength="200" />
+                      <button type="button" class="adorn" data-reveal="pw-current" aria-label="Mostrar contraseña" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="field">
+                    <label for="pw-new">Nueva contraseña</label>
+                    <div class="input-wrap">
+                      <input id="pw-new" type="password" autocomplete="new-password" maxlength="200" />
+                      <button type="button" class="adorn" data-reveal="pw-new" aria-label="Mostrar contraseña" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button>
+                    </div>
+                    <div class="pw-meter" id="pw-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                    <p class="field-note" id="pw-meter-text">Mínimo 8 caracteres.</p>
+                  </div>
+                    <div class="field">
+                    <label for="pw-confirm">Repite la nueva</label>
+                    <div class="input-wrap">
+                      <input id="pw-confirm" type="password" autocomplete="new-password" maxlength="200" />
+                      <button type="button" class="adorn" data-reveal="pw-confirm" aria-label="Mostrar contraseña" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button>
+                    </div>
+                  </div>
+                  </div>
+                  <div class="form-actions">
+                    <p class="form-error" id="pw-error" role="alert"></p>
+                    <button type="submit" class="btn btn-primary" id="pw-save">Cambiar contraseña</button>
+                  </div>
+                </form>
+              </div>
+            </div>
           </section>
         </div>
       </main>

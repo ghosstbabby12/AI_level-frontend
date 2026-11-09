@@ -544,6 +544,7 @@
     const n = mine.length;
     $("badge-mine").hidden = n === 0;
     $("badge-mine").textContent = String(n);
+    renderProfileStats();
     $("mine-summary").textContent = n === 0 ? "Todo lo que crees se guarda aquí, en tu cuenta." : n === 1 ? "1 juego guardado en tu cuenta." : n + " juegos guardados en tu cuenta.";
   }
 
@@ -628,7 +629,7 @@
 
   /* ================= Vistas ================= */
 
-  const VIEW_BY_HASH = { "#crear": "create", "#mis-juegos": "mine", "#ejemplos": "examples", "#como-funciona": "how" };
+  const VIEW_BY_HASH = { "#crear": "create", "#mis-juegos": "mine", "#ejemplos": "examples", "#como-funciona": "how", "#perfil": "profile" };
   const HASH_BY_VIEW = Object.fromEntries(Object.entries(VIEW_BY_HASH).map(([h, v]) => [v, h]));
   let currentView = "create";
 
@@ -659,7 +660,8 @@
   /** El boton flotante sobra cuando la caja de pedido ya esta a la vista. */
   function updateFab() {
     const promptVisible = currentView === "create" && window.scrollY < 260;
-    $("fab").hidden = !document.body.classList.contains("app-on") || promptVisible;
+    // En el perfil taparia los botones de guardar.
+    $("fab").hidden = !document.body.classList.contains("app-on") || promptVisible || currentView === "profile";
   }
   window.addEventListener("scroll", updateFab, { passive: true });
   $("fab").addEventListener("click", () => {
@@ -1247,6 +1249,318 @@
     toast({ kind: "info", title: "Vistas previas reiniciadas", text: "Se vuelven a capturar en unos segundos." });
   });
 
+  /* ================= Perfil ================= */
+
+  let me = null;
+  const SINCE = new Intl.DateTimeFormat("es", { month: "long", year: "numeric" });
+  const cleanSpaces = (v) => v.trim().replace(/\s+/g, " ");
+
+  /** Foto si la hay; si no, o si no carga, la inicial del nombre. */
+  function paintAvatar(el, user) {
+    const initial = () => { el.textContent = user.name.charAt(0).toUpperCase(); };
+    el.replaceChildren();
+    if (!user.avatarUrl) return initial();
+    const img = new Image();
+    img.alt = "";
+    img.decoding = "async";
+    img.addEventListener("error", initial, { once: true });
+    img.src = user.avatarUrl;
+    el.append(img);
+  }
+
+  /** Pinta los datos del usuario en todos los sitios donde aparecen. */
+  function setUser(user) {
+    me = user;
+    paintAvatar($("user-avatar"), user);
+    paintAvatar($("profile-avatar"), user);
+    $("user-name").textContent = user.name;
+    $("user-panel-name").textContent = user.name;
+    $("user-panel-email").textContent = user.email;
+    $("greeting").textContent = `Hola, ${user.name}. ¿Qué quieres jugar hoy?`;
+    $("profile-name").textContent = user.name;
+    $("profile-email").textContent = user.email;
+    $("profile-since").textContent = user.createdAt ? "Cuenta creada en " + SINCE.format(new Date(user.createdAt)) : "";
+    $("photo-remove").hidden = !user.avatarUrl;
+    $("photo-pick-2").textContent = user.avatarUrl ? "Cambiar foto" : "Subir foto";
+    fillProfileForm();
+  }
+
+  function renderProfileStats() {
+    $("stat-saved").textContent = String(mine.length);
+    $("stat-custom").textContent = String(mine.filter((l) => l.layout === "custom").length);
+  }
+
+  /** Peticion al perfil. Los errores llevan el campo culpable, si el servidor lo dice. */
+  async function profileRequest(method, url, body, type = "application/json") {
+    let res;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: body === undefined ? {} : { "Content-Type": type },
+        body: body === undefined ? undefined : type === "application/json" ? JSON.stringify(body) : body,
+      });
+    } catch (_) {
+      throw new Error("No hay conexión con el servidor. Inténtalo de nuevo.");
+    }
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      toast({ kind: "error", title: "Tu sesión terminó", text: "Vuelve a iniciar sesión para guardar los cambios." });
+      logout();
+      throw Object.assign(new Error(""), { silent: true });
+    }
+    if (!res.ok) throw Object.assign(new Error(data.error || "No se pudo guardar. Inténtalo de nuevo."), { field: data.field });
+    return data;
+  }
+
+  function clearInvalid(form) {
+    form.querySelectorAll(".field.invalid").forEach((f) => f.classList.remove("invalid"));
+    form.querySelectorAll("[aria-invalid]").forEach((i) => i.removeAttribute("aria-invalid"));
+  }
+  function markInvalid(inputId) {
+    const input = $(inputId);
+    if (!input) return;
+    input.closest(".field").classList.add("invalid");
+    input.setAttribute("aria-invalid", "true");
+    input.focus();
+  }
+
+  // Mostrar u ocultar cualquier contrasena del perfil.
+  $$("[data-reveal]").forEach((b) => b.addEventListener("click", () => {
+    const field = $(b.dataset.reveal);
+    const show = field.type === "password";
+    field.type = show ? "text" : "password";
+    b.setAttribute("aria-pressed", String(show));
+    b.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+  }));
+
+  // ---- Datos personales ----
+  const pf = {
+    form: $("profile-form"), name: $("pf-name"), email: $("pf-email"), phone: $("pf-phone"),
+    current: $("pf-current"), currentField: $("pf-current-field"), save: $("pf-save"), reset: $("pf-reset"), error: $("pf-error"),
+  };
+
+  /** La misma regla que el servidor: vacio vale (es opcional); si no, de 7 a 15 digitos. */
+  function validPhone(value) {
+    const phone = cleanSpaces(value);
+    const digits = phone.replace(/\D/g, "").length;
+    return !phone || (phone.length <= 25 && /^\+?[\d\s().-]+$/.test(phone) && digits >= 7 && digits <= 15);
+  }
+
+  /** Solo lo que cambio respecto a lo guardado, con la misma limpieza que hace el servidor. */
+  function profileChanges() {
+    if (!me) return {};
+    const changes = {};
+    if (cleanSpaces(pf.name.value) !== me.name) changes.name = pf.name.value;
+    if (pf.email.value.trim().toLowerCase() !== me.email) changes.email = pf.email.value;
+    if ((cleanSpaces(pf.phone.value) || null) !== (me.phone || null)) changes.phone = pf.phone.value;
+    return changes;
+  }
+
+  function updateProfileDirty() {
+    const changes = profileChanges();
+    const dirty = Object.keys(changes).length > 0;
+    pf.save.disabled = !dirty;
+    pf.reset.hidden = !dirty;
+    pf.currentField.hidden = !("email" in changes);
+    if (pf.currentField.hidden) pf.current.value = "";
+  }
+
+  function fillProfileForm() {
+    if (!me) return;
+    pf.name.value = me.name;
+    pf.email.value = me.email;
+    pf.phone.value = me.phone || "";
+    pf.current.value = "";
+    pf.error.textContent = "";
+    clearInvalid(pf.form);
+    updateProfileDirty();
+  }
+
+  pf.form.addEventListener("input", (event) => {
+    event.target.closest(".field")?.classList.remove("invalid");
+    pf.error.textContent = "";
+    updateProfileDirty();
+  });
+  pf.reset.addEventListener("click", fillProfileForm);
+
+  pf.form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const changes = profileChanges();
+    if (Object.keys(changes).length === 0) return;
+    clearInvalid(pf.form);
+    pf.error.textContent = "";
+    // Lo evidente se avisa sin ir al servidor.
+    if (!cleanSpaces(pf.name.value)) { pf.error.textContent = "Escribe tu nombre."; return markInvalid("pf-name"); }
+    if (!pf.email.checkValidity() || !pf.email.value.trim()) { pf.error.textContent = "El correo no es válido."; return markInvalid("pf-email"); }
+    if ("phone" in changes && !validPhone(pf.phone.value)) {
+      pf.error.textContent = "El teléfono no es válido: usa solo números, espacios, guiones y un + inicial (de 7 a 15 dígitos).";
+      return markInvalid("pf-phone");
+    }
+    if ("email" in changes) {
+      if (!pf.current.value) { pf.error.textContent = "Escribe tu contraseña actual para cambiar el correo."; return markInvalid("pf-current"); }
+      changes.currentPassword = pf.current.value;
+    }
+    pf.save.disabled = true;
+    pf.save.textContent = "Guardando…";
+    try {
+      const { user } = await profileRequest("PATCH", "/api/profile", changes);
+      setUser(user);
+      const what = ["name" in changes && "nombre", "email" in changes && "correo", "phone" in changes && "teléfono"].filter(Boolean);
+      toast({ kind: "success", title: "Perfil actualizado", text: "Guardamos tu " + what.join(", ").replace(/, ([^,]*)$/, " y $1") + "." });
+    } catch (err) {
+      if (err.silent) return;
+      pf.error.textContent = err.message;
+      markInvalid({ name: "pf-name", email: "pf-email", phone: "pf-phone", currentPassword: "pf-current" }[err.field]);
+    } finally {
+      pf.save.textContent = "Guardar cambios";
+      updateProfileDirty();
+    }
+  });
+
+  // ---- Contrasena ----
+  const pw = { form: $("password-form"), current: $("pw-current"), next: $("pw-new"), confirm: $("pw-confirm"), save: $("pw-save"), error: $("pw-error") };
+
+  /** Puntuacion orientativa de 0 a 4: largo y variedad de caracteres. */
+  function passwordScore(value) {
+    if (value.length < 8) return value ? 1 : 0;
+    const kinds = [/[a-z]/, /[A-Z]/, /\d/, /[^\w\s]/].filter((re) => re.test(value)).length;
+    return Math.min(4, 1 + (value.length >= 12) + (kinds >= 2) + (kinds >= 3 || value.length >= 16));
+  }
+  const SCORE_TEXT = ["Mínimo 8 caracteres.", "Muy corta: mínimo 8 caracteres.", "Aceptable. Más larga sería mejor.", "Buena.", "Muy buena."];
+
+  pw.form.addEventListener("input", (event) => {
+    event.target.closest(".field")?.classList.remove("invalid");
+    pw.error.textContent = "";
+    const score = passwordScore(pw.next.value);
+    $("pw-meter").dataset.score = String(score);
+    $("pw-meter-text").textContent = SCORE_TEXT[score];
+  });
+
+  function resetPasswordForm() {
+    pw.form.reset();
+    pw.error.textContent = "";
+    clearInvalid(pw.form);
+    $("pw-meter").dataset.score = "0";
+    $("pw-meter-text").textContent = SCORE_TEXT[0];
+    pw.form.querySelectorAll("[data-reveal]").forEach((b) => {
+      $(b.dataset.reveal).type = "password";
+      b.setAttribute("aria-pressed", "false");
+    });
+  }
+
+  pw.form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearInvalid(pw.form);
+    const fail = (text, id) => { pw.error.textContent = text; markInvalid(id); };
+    if (!pw.current.value) return fail("Escribe tu contraseña actual.", "pw-current");
+    if (pw.next.value.length < 8) return fail("La nueva contraseña debe tener al menos 8 caracteres.", "pw-new");
+    if (pw.next.value !== pw.confirm.value) return fail("Las contraseñas nuevas no coinciden.", "pw-confirm");
+    if (pw.next.value === pw.current.value) return fail("La nueva contraseña debe ser distinta de la actual.", "pw-new");
+    pw.save.disabled = true;
+    pw.save.textContent = "Cambiando…";
+    try {
+      await profileRequest("PUT", "/api/profile/password", { currentPassword: pw.current.value, newPassword: pw.next.value });
+      resetPasswordForm();
+      toast({ kind: "success", title: "Contraseña cambiada", text: "Cerramos tu sesión en los demás dispositivos; aquí sigues dentro." });
+    } catch (err) {
+      if (err.silent) return;
+      fail(err.message, { currentPassword: "pw-current", newPassword: "pw-new" }[err.field]);
+    } finally {
+      pw.save.disabled = false;
+      pw.save.textContent = "Cambiar contraseña";
+    }
+  });
+
+  // ---- Foto ----
+  const MAX_PHOTO_INPUT = 20 * 1024 * 1024;
+  const PHOTO_SIZE = 320;
+
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("No pudimos leer esa imagen. Prueba con una JPG o PNG.")); };
+      img.src = url;
+    });
+  }
+
+  /** Recorta al centro en cuadrado y reduce a 320 px en JPEG: unos 30 KB en vez de varios MB. */
+  async function squarePhoto(file) {
+    const img = await loadImage(file);
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const side = Math.min(w, h);
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = PHOTO_SIZE;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff"; // un PNG transparente no queda negro en JPEG
+    ctx.fillRect(0, 0, PHOTO_SIZE, PHOTO_SIZE);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
+    return new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No pudimos procesar la imagen."))), "image/jpeg", 0.88));
+  }
+
+  function setPhotoBusy(busy) {
+    $("photo-busy").hidden = !busy;
+    ["photo-pick", "photo-pick-2", "photo-remove"].forEach((id) => ($(id).disabled = busy));
+  }
+
+  async function uploadPhoto(file) {
+    if (!file.type.startsWith("image/")) return toast({ kind: "error", title: "Eso no es una imagen", text: "Elige una foto JPG, PNG o WebP." });
+    if (file.size > MAX_PHOTO_INPUT) return toast({ kind: "error", title: "La imagen es muy grande", text: "Elige una de menos de 20 MB." });
+    setPhotoBusy(true);
+    try {
+      const blob = await squarePhoto(file);
+      const { user } = await profileRequest("PUT", "/api/profile/avatar", blob, "image/jpeg");
+      setUser(user);
+      toast({ kind: "success", title: "Foto actualizada" });
+    } catch (err) {
+      if (!err.silent) toast({ kind: "error", title: "No se pudo cambiar la foto", text: err.message });
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  const photoInput = $("photo-input");
+  const pickPhoto = () => photoInput.click();
+  $("photo-pick").addEventListener("click", pickPhoto);
+  $("photo-pick-2").addEventListener("click", pickPhoto);
+  photoInput.addEventListener("change", () => {
+    const file = photoInput.files[0];
+    photoInput.value = ""; // asi elegir la misma foto otra vez tambien dispara el cambio
+    if (file) uploadPhoto(file);
+  });
+
+  const photoDrop = $("profile-photo");
+  ["dragenter", "dragover"].forEach((type) => photoDrop.addEventListener(type, (event) => {
+    if (![...event.dataTransfer.types].includes("Files")) return;
+    event.preventDefault();
+    photoDrop.classList.add("drop");
+  }));
+  ["dragleave", "drop"].forEach((type) => photoDrop.addEventListener(type, () => photoDrop.classList.remove("drop")));
+  photoDrop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file) uploadPhoto(file);
+  });
+
+  $("photo-remove").addEventListener("click", async () => {
+    if (!confirm("¿Quitar tu foto de perfil?")) return;
+    setPhotoBusy(true);
+    try {
+      const { user } = await profileRequest("DELETE", "/api/profile/avatar");
+      setUser(user);
+      toast({ kind: "info", title: "Foto quitada" });
+    } catch (err) {
+      if (!err.silent) toast({ kind: "error", title: "No se pudo quitar la foto", text: err.message });
+    } finally {
+      setPhotoBusy(false);
+    }
+  });
+
+  $("open-profile").addEventListener("click", () => { closePopover(); go("profile"); });
+
   /* ================= Sesion ================= */
 
   let authMode = "login";
@@ -1302,10 +1616,7 @@
     $("boot-view").hidden = true;
     $("auth-view").hidden = true;
     $("app-view").hidden = false;
-    $("user-avatar").textContent = user.name.charAt(0).toUpperCase();
-    $("user-name").textContent = user.name;
-    $("user-panel-name").textContent = user.name;
-    $("greeting").textContent = `Hola, ${user.name}. ¿Qué quieres jugar hoy?`;
+    setUser(user);
     showView(VIEW_BY_HASH[location.hash] || "create");
     if (currentView === "create" && !window.TouchControls.isTouchDevice()) input.focus();
     renderAllLibraries();
@@ -1351,6 +1662,8 @@
     if (game) { game.destroy(); game = null; }
     hideCustomGame();
     // Lo del usuario anterior no debe quedar a la vista.
+    me = null;
+    resetPasswordForm();
     mine = [];
     notifs = [];
     jobs.clear();
