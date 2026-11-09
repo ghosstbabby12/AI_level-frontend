@@ -587,7 +587,8 @@ window.LevelGame = { modes: {} };
       const d = Math.hypot(dx, dy);
       if (d > reach || p.dashT > 0) return;
       if (hurt(1)) {
-        say(message, 0.8);
+        // Si fue el golpe final, no se tapa el aviso de derrota (y su "Pulsa R").
+        if (state.status === "playing") say(message, 0.8);
         // Empujon para no recibir golpes seguidos.
         p.vx = (d ? dx / d : 0) * 9;
         p.vy = (d ? dy / d : -1) * 9;
@@ -1771,6 +1772,10 @@ window.LevelGame = { modes: {} };
       },
       get state() {
         return state;
+      },
+      /** Ultimo aviso del juego (al perder explica el motivo); lo usa la pantalla de Game Over. */
+      get message() {
+        return banner.text;
       },
       get tile() {
         return T;
