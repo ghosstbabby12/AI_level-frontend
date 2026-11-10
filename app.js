@@ -1270,9 +1270,11 @@
   let lastStatus = null;
   let roundStart = 0;
 
+  /** Cierra la pantalla de derrota o de victoria, la que este abierta. */
   function hideGameOver() {
     clearTimeout(overTimer);
     $("gameover").hidden = true;
+    $("victory").hidden = true;
   }
 
   function stopWatching() {
@@ -1288,9 +1290,10 @@
       if (!game) return;
       const status = game.state && game.state.status;
       if (status !== lastStatus) {
-        if (status === "lost") {
+        if (status === "lost" || status === "won") {
           const elapsed = performance.now() - roundStart;
-          overTimer = setTimeout(() => showGameOver(elapsed), GAMEOVER_DELAY_MS);
+          const show = status === "won" ? showVictory : showGameOver;
+          overTimer = setTimeout(() => show(elapsed), GAMEOVER_DELAY_MS);
         } else {
           hideGameOver();
           if (status === "playing") roundStart = performance.now();
@@ -1314,21 +1317,95 @@
     return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
   };
 
-  function showGameOver(elapsed) {
-    if (!game || !current) return;
-    const state = game.state;
-    const score = Math.max(0, Math.round(state.score || 0));
+  /** Guarda el record de este nivel y devuelve los numeros que muestran las dos pantallas. */
+  function roundResult() {
+    const score = Math.max(0, Math.round(game.state.score || 0));
     const key = "best:" + (current.id || "ejemplo:" + current.layout);
     const best = Number(storage.get(key)) || 0;
     const record = score > best;
     if (record) storage.set(key, String(score));
+    return { score, best: Math.max(best, score), record: record && score > 0 };
+  }
+
+  function showGameOver(elapsed) {
+    if (!game || !current) return;
+    const state = game.state;
+    const { score, best, record } = roundResult();
     $("go-reason").textContent = lossReason(state);
     $("go-score").textContent = score.toLocaleString("es");
     $("go-time").textContent = formatTime(elapsed);
-    $("go-best").textContent = Math.max(best, score).toLocaleString("es");
-    $("go-record").hidden = !record || score === 0;
+    $("go-best").textContent = best.toLocaleString("es");
+    $("go-record").hidden = !record;
     $("gameover").hidden = false;
     $("go-retry").focus({ preventScroll: true });
+  }
+
+  /* ---------- Victoria y nivel siguiente ---------- */
+
+  // Los juegos libres (HTML de la IA) no avisan si se ganan: la cadena es para los 11 estilos.
+  const stageOf = (level) => level.stage || 1;
+  let advancing = false;
+
+  function showVictory(elapsed) {
+    if (!game || !current) return;
+    const { score, best, record } = roundResult();
+    const stage = stageOf(current);
+    $("vc-kicker").textContent = `Nivel ${stage} superado`;
+    $("vc-next").textContent = `Sigue el nivel ${stage + 1}: más enemigos, más peligros y un mapa más grande.`;
+    $("vc-score").textContent = score.toLocaleString("es");
+    $("vc-time").textContent = formatTime(elapsed);
+    $("vc-best").textContent = best.toLocaleString("es");
+    $("vc-record").hidden = !record;
+    $("vc-error").hidden = true;
+    $("victory").hidden = false;
+    $("vc-next-btn").focus({ preventScroll: true });
+  }
+
+  async function playNextLevel() {
+    if (!current || advancing) return;
+    advancing = true;
+    const button = $("vc-next-btn");
+    button.setAttribute("aria-busy", "true");
+    $("vc-next-label").textContent = "Preparando…";
+    $("vc-error").hidden = true;
+    try {
+      const res = await fetch(`/api/levels/${encodeURIComponent(current.id)}/next`, { method: "POST" });
+      const level = await res.json().catch(() => ({}));
+      if (res.status === 401) { hideGameOver(); showAuth(); return; }
+      if (!res.ok) throw new Error(level.error || "No se pudo preparar el siguiente nivel.");
+      hideGameOver();
+      if (level.saved) {
+        levelCache.set(level.id, level);
+        addMine({ id: level.id, title: level.narrative.title, description: level.description, label: genreLabel(level.tag), tag: level.tag, layout: level.layout, createdAt: level.createdAt });
+      }
+      playLevel(level);
+      toast({ kind: "success", title: `Nivel ${stageOf(level)}`, text: "Un poco más difícil que el anterior. ¡Suerte!" });
+    } catch (err) {
+      $("vc-error").textContent = err.message === "Failed to fetch" ? "Sin conexión. Revisa tu red e inténtalo de nuevo." : err.message;
+      $("vc-error").hidden = false;
+    } finally {
+      advancing = false;
+      button.removeAttribute("aria-busy");
+      $("vc-next-label").textContent = "Siguiente nivel";
+    }
+  }
+
+  $("vc-next-btn").addEventListener("click", playNextLevel);
+  $("vc-retry").addEventListener("click", () => {
+    if (!game) return;
+    game.restart();
+    hideGameOver();
+    canvas.focus({ preventScroll: true });
+  });
+  $("vc-other").addEventListener("click", () => { hideGameOver(); go(mine.length ? "mine" : "examples"); });
+  $("vc-peek").addEventListener("click", () => { hideGameOver(); canvas.focus({ preventScroll: true }); });
+
+  // El juego escucha el teclado en toda la ventana: Enter o Espacio sobre un boton de estas
+  // pantallas tambien reiniciaria la partida. Se cortan aqui; el clic del boton sigue igual.
+  for (const id of ["gameover", "victory"]) {
+    $(id).addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+    });
   }
 
   $("go-retry").addEventListener("click", () => {
@@ -1341,7 +1418,9 @@
   $("go-other").addEventListener("click", () => { hideGameOver(); go(mine.length ? "mine" : "examples"); });
   $("go-peek").addEventListener("click", () => { hideGameOver(); canvas.focus({ preventScroll: true }); });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !$("gameover").hidden) { hideGameOver(); canvas.focus({ preventScroll: true }); }
+    const open = !$("gameover").hidden || !$("victory").hidden;
+    if (event.key === "Escape" && open) { hideGameOver(); canvas.focus({ preventScroll: true }); }
+    if ((event.key === "n" || event.key === "N") && !$("victory").hidden && !event.metaKey && !event.ctrlKey) playNextLevel();
   });
 
   $("restart").addEventListener("click", () => {

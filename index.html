@@ -659,6 +659,24 @@
     .gameover kbd { color: inherit; background: rgba(0, 0, 0, .15); border-color: rgba(0, 0, 0, .2); box-shadow: none; }
     .go-peek { margin-top: 12px; color: #9aa3b5; display: inline-flex; align-items: center; gap: 6px; }
     .go-peek kbd { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .14); color: #c3c9d5; }
+    /* ---------- Victoria: la misma pantalla, en dorado y sin interferencia ---------- */
+    .victory {
+      background: radial-gradient(ellipse at center, rgba(40, 30, 6, .5), rgba(8, 7, 4, .9));
+      backdrop-filter: blur(6px) saturate(.8); -webkit-backdrop-filter: blur(6px) saturate(.8);
+    }
+    .victory::before {
+      opacity: .5; animation: none;
+      background: radial-gradient(circle at 50% 30%, rgba(255, 214, 110, .22), transparent 55%);
+    }
+    .victory .go-card { border-color: rgba(255, 214, 110, .3); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8), 0 0 60px -20px rgba(255, 196, 70, .45), inset 0 1px 0 rgba(255, 255, 255, .1); }
+    .victory .go-kicker { color: #f3cf7a; }
+    .victory .go-title { background: linear-gradient(180deg, #fff6d8, #f5b94a); -webkit-background-clip: text; background-clip: text; text-shadow: 0 0 34px rgba(245, 185, 74, .35); animation: vc-pop .7s .15s cubic-bezier(.2, 1.5, .4, 1) both; }
+    @keyframes vc-pop { from { transform: scale(.6); opacity: 0; } }
+    .victory .btn-primary { --accent: #ffe08a; --accent-2: #f5b94a; --on-accent: #1d1503; }
+    .victory .btn-primary svg { width: 18px; height: 18px; }
+    .victory .btn-primary[aria-busy="true"] { opacity: .75; cursor: progress; }
+    .vc-error { margin: 0 auto 12px; max-width: 42ch; color: #ffb4b4; font-size: 14px; }
+    @media (prefers-reduced-motion: reduce) { .victory .go-title { animation: none; } }
     /* En pantallas chicas el lienzo es bajo: la pantalla ocupa toda la ventana para que quepan los botones. */
     @media (max-width: 700px), (orientation: landscape) and (max-height: 520px) {
       .gameover { position: fixed; inset: 0; z-index: 70; border-radius: 0; overflow-y: auto; }
@@ -1088,6 +1106,38 @@
                         </button>
                       </div>
                       <button type="button" class="link-btn go-peek" id="go-peek">Ver cómo terminó <kbd>Esc</kbd></button>
+                    </div>
+                  </div>
+
+                  <!-- Pantalla de victoria: aparece al superar el nivel y lleva al siguiente, mas dificil -->
+                  <div class="gameover victory" id="victory" role="dialog" aria-modal="false" aria-labelledby="vc-title" hidden>
+                    <div class="go-card">
+                      <p class="go-kicker" id="vc-kicker">Nivel 1 superado</p>
+                      <h2 class="go-title" id="vc-title">¡VICTORIA!</h2>
+                      <p class="go-reason" id="vc-next">Sigue el nivel 2: más enemigos, más peligros.</p>
+                      <p class="go-record" id="vc-record" hidden>★ ¡Nuevo récord!</p>
+                      <dl class="go-stats">
+                        <div><dt>Puntos</dt><dd id="vc-score">0</dd></div>
+                        <div><dt>Tiempo</dt><dd id="vc-time">0:00</dd></div>
+                        <div><dt>Récord</dt><dd id="vc-best">0</dd></div>
+                      </dl>
+                      <p class="vc-error" id="vc-error" role="alert" hidden></p>
+                      <div class="go-actions">
+                        <button type="button" class="btn btn-primary" id="vc-next-btn">
+                          <span id="vc-next-label">Siguiente nivel</span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+                          <kbd>N</kbd>
+                        </button>
+                        <button type="button" class="btn" id="vc-retry">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>
+                          Repetir <kbd>R</kbd>
+                        </button>
+                        <button type="button" class="btn" id="vc-other">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+                          Elegir otro juego
+                        </button>
+                      </div>
+                      <button type="button" class="link-btn go-peek" id="vc-peek">Ver el nivel <kbd>Esc</kbd></button>
                     </div>
                   </div>
                 </div>
