@@ -821,12 +821,13 @@
   /* ================= Progreso por etapas ================= */
 
   const STAGES_FAST = ["Interpretar tu idea", "Preparar el juego"];
-  const STAGES_CUSTOM = ["Interpretar", "En cola", "Escribir el juego", "Revisar y guardar"];
+  const STAGES_CUSTOM = ["Interpretar", "Escribir", "Revisar", "Guardar"];
   let progressTimer = null;
 
-  function renderProgress({ title, stages, index, text, startedAt }) {
+  function renderProgress({ title, stages, index, text, startedAt, live = false }) {
     $("progress").hidden = false;
     $("progress-title").textContent = title;
+    $("progress-live").hidden = !live;
     $("progress-text").textContent = text || "";
     const segs = $("progress-segs");
     const labels = $("progress-labels");
@@ -848,9 +849,11 @@
 
   /* ================= Trabajos en segundo plano (juegos libres) ================= */
 
+  // Con el WebSocket conectado, el servidor avisa de cada cambio y el sondeo queda solo como red de
+  // seguridad (por si se pierde un aviso). Sin conexion en vivo se vuelve a consultar cada 2,5 s.
   const JOB_POLL_MS = 2500;
+  const JOB_POLL_LIVE_MS = 20_000;
   const JOB_TIMEOUT_MS = 6 * 60_000;
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const jobs = new Map();
   let shownJob = null;
   let lastOpenedAt = 0;
@@ -864,11 +867,17 @@
     $("jobs-pill").title = [...jobs.values()].map((j) => j.title).join(", ");
   }
 
+  /** Etapa real que informa el servidor; sin ella (backend antiguo), una estimacion por tiempo. */
   function customStage(job) {
     const seconds = (Date.now() - job.startedAt) / 1000;
-    if (job.status === "pending") return { index: 1, text: "En cola: el servidor empezará en un momento." };
+    switch (job.stage) {
+      case "validating": return { index: 2, text: "La IA terminó de escribir. Comprobando que el código funcione…" };
+      case "fixing": return { index: 2, text: "La revisión encontró errores y la IA los está corrigiendo. Tarda un poco más." };
+      case "saving": return { index: 3, text: "Todo en orden. Guardándolo en tus juegos…" };
+    }
+    if (job.status === "pending") return { index: 1, text: "Preparando la escritura del juego…" };
     return {
-      index: 2,
+      index: 1,
       text: seconds < 70
         ? "La IA está escribiendo el código del juego. Suele tardar uno o dos minutos; puedes seguir usando la app y te avisaremos."
         : "Sigue escribiendo: los juegos con más reglas tardan un poco más. Después se revisa que el código funcione.",
@@ -877,28 +886,65 @@
 
   function showJobProgress(job) {
     const { index, text } = customStage(job);
-    renderProgress({ title: "Creando «" + job.title + "»", stages: STAGES_CUSTOM, index, text, startedAt: job.startedAt });
+    renderProgress({ title: "Creando «" + job.title + "»", stages: STAGES_CUSTOM, index, text, startedAt: job.startedAt, live: realtime.connected });
   }
 
-  async function trackJob(pending) {
-    const job = { id: pending.job, title: pending.title || "tu juego", status: "pending", startedAt: Date.now() };
+  const isFinished = (job) => job.status === "done" || job.status === "error";
+
+  /** Espera hasta la proxima consulta, o menos si un aviso en vivo dice que ya termino. */
+  function sleepJob(job) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(done, realtime.connected ? JOB_POLL_LIVE_MS : JOB_POLL_MS);
+      function done() { clearTimeout(timer); job.wake = null; resolve(); }
+      job.wake = done;
+    });
+  }
+
+  /** Tras reconectar pudo perderse un aviso: todos los trabajos consultan ya. */
+  function wakeJobs() {
+    for (const job of jobs.values()) job.wake?.();
+  }
+
+  /**
+   * Sigue un juego a medida hasta que termina. adopted: lo empezo otra pestana u otro dispositivo
+   * de la misma cuenta y nos enteramos por el aviso en vivo.
+   */
+  async function trackJob(pending, { adopted = false, status = "pending", stage = null } = {}) {
+    const existing = jobs.get(pending.job);
+    if (existing) {
+      // El aviso en vivo puede llegar antes que la respuesta de /generate: esta pestana lo pidio.
+      if (!adopted && existing.adopted) {
+        existing.adopted = false;
+        existing.title = pending.title || existing.title;
+        shownJob = existing.id;
+        showJobProgress(existing);
+        loadQuota();
+      }
+      return;
+    }
+    const job = { id: pending.job, title: pending.title || "tu juego", status, stage, adopted, startedAt: Date.now(), wake: null };
     jobs.set(job.id, job);
-    shownJob = job.id;
     renderJobs();
-    showJobProgress(job);
-    if (quota) { quota = { ...quota, used: quota.used + 1 }; renderQuota(); }
+    if (adopted) loadQuota();
+    else {
+      shownJob = job.id;
+      showJobProgress(job);
+      if (quota) { quota = { ...quota, used: quota.used + 1 }; renderQuota(); }
+    }
 
     try {
       let level = null;
       while (!level) {
         if (Date.now() - job.startedAt > JOB_TIMEOUT_MS) throw new Error("Está tardando demasiado. Inténtalo de nuevo en un momento.");
-        await wait(JOB_POLL_MS);
+        if (!isFinished(job)) await sleepJob(job);
+        if (!jobs.has(job.id)) return; // se cerro la sesion
         const res = await fetch("/api/levels/jobs/" + encodeURIComponent(job.id));
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || "No se pudo crear el juego.");
         if (body.status === "done") level = body.level;
         else {
           job.status = body.status || job.status;
+          job.stage = body.stage || job.stage;
           if (shownJob === job.id) showJobProgress(job);
         }
       }
@@ -917,15 +963,116 @@
         setTimeout(hideProgress, 900);
         shownJob = null;
       }
-      notify({ kind: "success", title: "«" + level.narrative.title + "» está listo", text: "Tu juego a medida ya se puede jugar.", action: autoplay ? null : { label: "Jugar ahora", run: play } });
+      notify({
+        kind: "success",
+        title: "«" + level.narrative.title + "» está listo",
+        text: job.adopted ? "Lo pediste en otra pestaña o dispositivo; ya se puede jugar aquí." : "Tu juego a medida ya se puede jugar.",
+        action: autoplay ? null : { label: "Jugar ahora", run: play },
+      });
       if (autoplay) play();
     } catch (err) {
+      if (!jobs.has(job.id)) return;
       jobs.delete(job.id);
       renderJobs();
       if (shownJob === job.id) { hideProgress(); shownJob = null; showError(err.message); }
       notify({ kind: "error", title: "No se pudo crear «" + job.title + "»", text: err.message });
+      if (job.adopted) loadQuota();
     }
   }
+
+  /** Aviso en vivo sobre un trabajo: actualiza su etapa o, si termino, lo consulta ya. */
+  function onJobEvent(event) {
+    const job = jobs.get(event.id);
+    if (!job) {
+      // De otra pestana u otro dispositivo de la misma cuenta: se sigue aqui tambien.
+      trackJob({ job: event.id, title: event.title }, { adopted: true, status: event.status, stage: event.stage });
+      return;
+    }
+    job.status = event.status;
+    if (event.stage) job.stage = event.stage;
+    if (event.title && job.title === "tu juego") job.title = event.title;
+    if (isFinished(job)) job.wake?.();
+    else if (shownJob === job.id) showJobProgress(job);
+  }
+
+  /* ================= Tiempo real (WebSocket) ================= */
+
+  // El navegador pide un ticket de un solo uso por HTTP (con la cookie de sesion) y con el abre el
+  // WebSocket directo contra el backend. Si algo falla, todo sigue funcionando con el sondeo.
+  const realtime = { ws: null, connected: false, wanted: false, retry: 0, timer: null, unsupported: false };
+
+  function setLive(on) {
+    realtime.connected = on;
+    const job = shownJob && jobs.get(shownJob);
+    if (job) showJobProgress(job);
+  }
+
+  async function connectRealtime() {
+    clearTimeout(realtime.timer);
+    if (!realtime.wanted || realtime.ws || realtime.unsupported || !("WebSocket" in window)) return;
+    let ws;
+    try {
+      const res = await fetch("/api/realtime/ticket", { method: "POST" });
+      // 404: backend sin tiempo real todavia; no tiene sentido insistir.
+      if (res.status === 404) { realtime.unsupported = true; return; }
+      if (!res.ok) throw new Error("sin ticket");
+      const { ticket, url } = await res.json();
+      if (!realtime.wanted || realtime.ws) return;
+      ws = new WebSocket(url + (url.includes("?") ? "&" : "?") + "ticket=" + encodeURIComponent(ticket));
+    } catch (_) {
+      return scheduleReconnect();
+    }
+    realtime.ws = ws;
+    ws.addEventListener("message", (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch (_) { return; }
+      if (msg.type === "hello") {
+        realtime.retry = 0;
+        setLive(true);
+        wakeJobs();
+      } else if (msg.type === "job" && msg.job) {
+        onJobEvent(msg.job);
+      }
+    });
+    ws.addEventListener("close", () => {
+      if (realtime.ws !== ws) return;
+      realtime.ws = null;
+      if (realtime.connected) { setLive(false); wakeJobs(); }
+      scheduleReconnect();
+    });
+  }
+
+  /** Reintenta con espera creciente: 1, 2, 4, 8, 16 y luego cada 30 s. */
+  function scheduleReconnect() {
+    if (!realtime.wanted) return;
+    clearTimeout(realtime.timer);
+    const delay = Math.min(30_000, 1000 * 2 ** realtime.retry++);
+    realtime.timer = setTimeout(connectRealtime, delay);
+  }
+
+  function startRealtime() {
+    realtime.wanted = true;
+    realtime.retry = 0;
+    connectRealtime();
+  }
+
+  function stopRealtime() {
+    realtime.wanted = false;
+    clearTimeout(realtime.timer);
+    const ws = realtime.ws;
+    realtime.ws = null;
+    realtime.connected = false;
+    if (ws) ws.close();
+  }
+
+  // Al volver a la pestana o recuperar la red no se espera al siguiente reintento.
+  const reconnectNow = () => {
+    if (!realtime.wanted || realtime.ws) return;
+    realtime.retry = 0;
+    connectRealtime();
+  };
+  window.addEventListener("online", reconnectNow);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reconnectNow(); });
 
   $("jobs-pill").addEventListener("click", () => {
     go("create");
@@ -1625,6 +1772,7 @@
     loadExamples();
     loadMine();
     loadQuota();
+    startRealtime();
     openSharedLevel();
   }
 
@@ -1663,6 +1811,7 @@
     hideCustomGame();
     // Lo del usuario anterior no debe quedar a la vista.
     me = null;
+    stopRealtime();
     resetPasswordForm();
     mine = [];
     notifs = [];

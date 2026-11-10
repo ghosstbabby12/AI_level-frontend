@@ -453,6 +453,15 @@
     .progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
     .progress-top strong { font-size: 15px; }
     .progress-top span { color: var(--faint); font-size: 13px; font-variant-numeric: tabular-nums; }
+    .progress-meta { display: inline-flex; align-items: center; gap: 10px; }
+    .progress-top .live-chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+      letter-spacing: .02em; color: var(--success); background: color-mix(in srgb, var(--success) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
+    }
+    .live-chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: live-pulse 1.6s ease-in-out infinite; }
+    @keyframes live-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 60%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+    @media (prefers-reduced-motion: reduce) { .live-chip i { animation: none; } }
     .segs { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 6px; }
     .seg { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
     .seg.done { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
@@ -1011,7 +1020,7 @@
             <p id="error" role="alert"></p>
 
             <div class="progress" id="progress" role="status" aria-live="polite" hidden>
-              <div class="progress-top"><strong id="progress-title">Generando…</strong><span id="progress-time"></span></div>
+              <div class="progress-top"><strong id="progress-title">Generando…</strong><span class="progress-meta"><span class="live-chip" id="progress-live" title="El servidor avisa al instante de cada etapa" hidden><i aria-hidden="true"></i>En vivo</span><span id="progress-time"></span></span></div>
               <div class="segs" id="progress-segs"></div>
               <div class="seg-labels" id="progress-labels"></div>
               <p id="progress-text"></p>
