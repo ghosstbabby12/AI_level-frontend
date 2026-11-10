@@ -204,6 +204,7 @@
   const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>';
   const DOTS_ICON = svg('<circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>');
   const LINK_ICON = svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>');
+  const EDIT_ICON = svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>');
   const TRASH_ICON = svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>');
 
   function makeArt(shotKey, getLevel) {
@@ -560,6 +561,7 @@
       getLevel: () => fetchLevel(summary.id),
       onPlay: () => openMine(summary),
       menu: [
+        { label: "Editar", icon: EDIT_ICON, action: () => openEditor(summary.id) },
         { label: "Compartir", icon: LINK_ICON, action: () => shareLink(summary.id, summary.title) },
         { label: "Borrar", icon: TRASH_ICON, danger: true, action: () => deleteMine(summary) },
       ],
@@ -1232,6 +1234,7 @@
     // Los ejemplos no estan guardados: no tienen imagen ni enlace propio.
     const saved = Boolean(level.id) && !String(level.id).startsWith("ejemplo-");
     $("share").hidden = !saved;
+    $("edit-level").hidden = !mine.some((m) => m.id === level.id);
     $("share-label").textContent = "Compartir";
     if (saved && level.imageUrl) $("image").src = level.imageUrl;
     const custom = level.layout === "custom";
@@ -1456,6 +1459,363 @@
     if (level) playLevel(level);
     else showError("Ese juego ya no existe o el enlace está incompleto.");
   }
+
+  /* ================= Editor de escenarios ================= */
+
+  // Copia de las reglas del backend (que es quien decide): que casillas usa cada estilo.
+  // Carreras no se edita: su recorrido se calcula aparte del mapa.
+  const EDITABLE = {
+    maze: ["wall", "floor", "start", "exit", "trap", "enemy", "item", "boss"],
+    dungeon: ["wall", "floor", "start", "exit", "trap", "enemy", "item", "boss"],
+    cave: ["wall", "floor", "start", "exit", "trap", "enemy", "item", "boss"],
+    platformer: ["wall", "floor", "start", "exit", "trap", "enemy", "item", "boss"],
+    arcade: ["wall", "floor", "start", "enemy", "item", "power", "boss"],
+    survival: ["wall", "floor", "start", "trap", "enemy", "item", "boss"],
+    shooter: ["wall", "floor", "trap", "enemy", "item", "boss"],
+    invaders: ["wall", "floor", "enemy", "boss"],
+    breakout: ["wall", "floor", "trap", "enemy", "item", "power", "boss"],
+    snake: ["wall", "floor", "start", "trap", "item"],
+  };
+  const FIXED_START = new Set(["shooter", "invaders", "breakout"]);
+  const UNIQUE = new Set(["start", "exit", "boss"]);
+  const CELL_CODE = { wall: "#", floor: ".", start: "S", exit: "E", trap: "^", enemy: "M", item: "$", boss: "B", power: "P" };
+  const CELL_LABEL = { wall: "Pared", floor: "Suelo", start: "Inicio", exit: "Salida", trap: "Trampa", enemy: "Enemigo", item: "Objeto", power: "Poder", boss: "Jefe" };
+  const LABEL_BY_LAYOUT = {
+    arcade: { item: "Punto" },
+    survival: { enemy: "Aparición", item: "Curación" },
+    shooter: { item: "Diana", enemy: "Blanco móvil", trap: "Bomba" },
+    invaders: { enemy: "Invasor" },
+    breakout: { item: "Bloque", trap: "Explosivo", enemy: "Bloque duro" },
+    snake: { item: "Comida" },
+  };
+  const cellLabel = (layout, cell) => (LABEL_BY_LAYOUT[layout] || {})[cell] || CELL_LABEL[cell];
+
+  const ed = { level: null, grid: null, original: null, tool: "wall", undo: [], redo: [], size: 16, painting: false, last: null, hover: null, busy: false };
+  const editor = $("editor");
+  const edCanvas = $("ed-canvas");
+
+  /** Dibuja una casilla. Figuras simples y reconocibles; los colores de pared y suelo son los del tema. */
+  function drawCell(ctx, cell, x, y, s, palette, alt) {
+    ctx.fillStyle = cell === "wall" ? palette.wall : alt ? palette.floorAlt || palette.floor : palette.floor;
+    ctx.fillRect(x, y, s, s);
+    if (cell === "wall") {
+      ctx.fillStyle = palette.wallAccent || "rgba(255,255,255,.12)";
+      ctx.fillRect(x, y, s, Math.max(1, s * 0.18));
+      return;
+    }
+    const cx = x + s / 2, cy = y + s / 2, r = s * 0.36;
+    ctx.lineWidth = Math.max(1, s / 12);
+    switch (cell) {
+      case "trap":
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath(); ctx.moveTo(cx, y + s * 0.15); ctx.lineTo(x + s * 0.85, y + s * 0.82); ctx.lineTo(x + s * 0.15, y + s * 0.82); ctx.closePath(); ctx.fill();
+        break;
+      case "enemy":
+        ctx.fillStyle = "#a855f7";
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(cx - r * 0.5, cy - r * 0.25, r * 0.32, r * 0.32); ctx.fillRect(cx + r * 0.18, cy - r * 0.25, r * 0.32, r * 0.32);
+        break;
+      case "item":
+        ctx.fillStyle = "#facc15";
+        ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * 0.8, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r * 0.8, cy); ctx.closePath(); ctx.fill();
+        break;
+      case "power":
+        ctx.fillStyle = "#22d3ee";
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.8, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#ecfeff"; ctx.beginPath(); ctx.arc(cx, cy, r * 0.4, 0, Math.PI * 2); ctx.stroke();
+        break;
+      case "boss":
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath(); ctx.arc(cx, cy + r * 0.1, r * 1.1, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fde047";
+        ctx.beginPath(); ctx.moveTo(cx - r * 0.8, cy - r * 0.5); ctx.lineTo(cx - r * 0.4, cy - r * 1.1); ctx.lineTo(cx, cy - r * 0.6); ctx.lineTo(cx + r * 0.4, cy - r * 1.1); ctx.lineTo(cx + r * 0.8, cy - r * 0.5); ctx.closePath(); ctx.fill();
+        break;
+      case "start":
+        ctx.fillStyle = "#22c55e";
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#052e16";
+        ctx.beginPath(); ctx.moveTo(cx - r * 0.35, cy - r * 0.5); ctx.lineTo(cx + r * 0.55, cy); ctx.lineTo(cx - r * 0.35, cy + r * 0.5); ctx.closePath(); ctx.fill();
+        break;
+      case "exit":
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(x + s * 0.22, y + s * 0.12, s * 0.56, s * 0.76);
+        ctx.fillStyle = "#dbeafe";
+        ctx.fillRect(x + s * 0.58, y + s * 0.48, s * 0.08, s * 0.08);
+        break;
+    }
+  }
+
+  function paintMap() {
+    const { grid, size: s, level } = ed;
+    const h = grid.length, w = grid[0].length;
+    const dpr = window.devicePixelRatio || 1;
+    edCanvas.width = w * s * dpr;
+    edCanvas.height = h * s * dpr;
+    edCanvas.style.width = w * s + "px";
+    edCanvas.style.height = h * s + "px";
+    const ctx = edCanvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) drawCell(ctx, grid[y][x], x * s, y * s, s, level.palette, (x + y) % 2 === 1);
+    if (s >= 10) {
+      ctx.strokeStyle = "rgba(255,255,255,.06)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 1; x < w; x++) { ctx.moveTo(x * s + 0.5, 0); ctx.lineTo(x * s + 0.5, h * s); }
+      for (let y = 1; y < h; y++) { ctx.moveTo(0, y * s + 0.5); ctx.lineTo(w * s, y * s + 0.5); }
+      ctx.stroke();
+    }
+    if (ed.hover) {
+      ctx.strokeStyle = lockedCell(ed.hover.x, ed.hover.y) ? "rgba(239,68,68,.9)" : "rgba(255,255,255,.9)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ed.hover.x * s + 1, ed.hover.y * s + 1, s - 2, s - 2);
+    }
+  }
+
+  function renderTools() {
+    const layout = ed.level.layout;
+    const counts = {};
+    for (const row of ed.grid) for (const cell of row) counts[cell] = (counts[cell] || 0) + 1;
+    const tools = EDITABLE[layout].filter((cell) => !(cell === "start" && FIXED_START.has(layout)));
+    $("ed-tools").replaceChildren(...tools.map((cell) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ed-tool";
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(ed.tool === cell));
+      const icon = document.createElement("canvas");
+      icon.width = icon.height = 44;
+      const ictx = icon.getContext("2d");
+      ictx.scale(2, 2);
+      drawCell(ictx, cell, 0, 0, 22, ed.level.palette, false);
+      const name = document.createElement("span");
+      name.textContent = cellLabel(layout, cell);
+      b.append(icon, name);
+      if (!["wall", "floor"].includes(cell)) {
+        const n = document.createElement("span");
+        n.className = "count";
+        n.textContent = counts[cell] || 0;
+        b.append(n);
+      }
+      b.addEventListener("click", () => { ed.tool = cell; renderTools(); });
+      return b;
+    }));
+  }
+
+  const rowsOf = (grid) => grid.map((row) => row.map((c) => CELL_CODE[c]).join(""));
+  const cloneGrid = (grid) => grid.map((row) => row.slice());
+  const mapChanged = () => ed.grid && rowsOf(ed.grid).join("\n") !== rowsOf(ed.original).join("\n");
+  const textChanged = () => ed.level && ($("ed-title").value.trim() !== ed.level.narrative.title || $("ed-story").value.trim() !== (ed.level.narrative.story || ""));
+  const dirty = () => textChanged() || (ed.grid && mapChanged());
+
+  function lockedCell(x, y) {
+    const h = ed.grid.length, w = ed.grid[0].length;
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1) return true;
+    return FIXED_START.has(ed.level.layout) && ed.original[y][x] === "start";
+  }
+
+  function syncHistory() {
+    $("ed-undo").disabled = ed.undo.length === 0;
+    $("ed-redo").disabled = ed.redo.length === 0;
+    $("ed-reset").disabled = !mapChanged();
+  }
+
+  function snapshot() {
+    ed.undo.push(cloneGrid(ed.grid));
+    if (ed.undo.length > 60) ed.undo.shift();
+    ed.redo = [];
+  }
+
+  /** Pinta una casilla con el pincel. Inicio, salida y jefe son unicos: el anterior pasa a suelo. */
+  function paintAt(x, y) {
+    if (lockedCell(x, y) || ed.grid[y][x] === ed.tool) return false;
+    if (UNIQUE.has(ed.tool)) {
+      for (const row of ed.grid) for (let i = 0; i < row.length; i++) if (row[i] === ed.tool) row[i] = "floor";
+    }
+    ed.grid[y][x] = ed.tool;
+    return true;
+  }
+
+  function cellFromEvent(event) {
+    const rect = edCanvas.getBoundingClientRect();
+    const x = Math.floor((event.clientX - rect.left) / ed.size);
+    const y = Math.floor((event.clientY - rect.top) / ed.size);
+    return x >= 0 && y >= 0 && y < ed.grid.length && x < ed.grid[0].length ? { x, y } : null;
+  }
+
+  /** Une los puntos del arrastre para que un movimiento rapido no deje huecos. */
+  function strokeTo(to) {
+    const from = ed.last || to;
+    const steps = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y), 1);
+    let changed = false;
+    for (let i = 1; i <= steps; i++) {
+      changed = paintAt(Math.round(from.x + ((to.x - from.x) * i) / steps), Math.round(from.y + ((to.y - from.y) * i) / steps)) || changed;
+    }
+    ed.last = to;
+    return changed;
+  }
+
+  edCanvas.addEventListener("pointerdown", (event) => {
+    if (!ed.grid || event.button > 0) return;
+    const cell = cellFromEvent(event);
+    if (!cell) return;
+    try { edCanvas.setPointerCapture(event.pointerId); } catch (_) { /* puntero ya liberado */ }
+    snapshot();
+    ed.painting = true;
+    ed.last = null;
+    strokeTo(cell);
+    afterPaint();
+  });
+  edCanvas.addEventListener("pointermove", (event) => {
+    if (!ed.grid) return;
+    const cell = cellFromEvent(event);
+    ed.hover = event.pointerType === "mouse" ? cell : null;
+    if (ed.painting && cell) strokeTo(cell);
+    paintMap();
+  });
+  const endStroke = () => {
+    if (!ed.painting) return;
+    ed.painting = false;
+    ed.last = null;
+    // Un trazo que no cambio nada no ocupa un paso de deshacer.
+    if (ed.undo.length && rowsOf(ed.undo[ed.undo.length - 1]).join() === rowsOf(ed.grid).join()) ed.undo.pop();
+    afterPaint();
+  };
+  edCanvas.addEventListener("pointerup", endStroke);
+  edCanvas.addEventListener("pointercancel", endStroke);
+  edCanvas.addEventListener("pointerleave", () => { ed.hover = null; if (ed.grid) paintMap(); });
+
+  function afterPaint() {
+    $("ed-error").textContent = "";
+    paintMap();
+    renderTools();
+    syncHistory();
+  }
+
+  function stepHistory(from, to) {
+    if (!from.length) return;
+    to.push(cloneGrid(ed.grid));
+    ed.grid = from.pop();
+    afterPaint();
+  }
+  $("ed-undo").addEventListener("click", () => stepHistory(ed.undo, ed.redo));
+  $("ed-redo").addEventListener("click", () => stepHistory(ed.redo, ed.undo));
+  $("ed-reset").addEventListener("click", () => { snapshot(); ed.grid = cloneGrid(ed.original); afterPaint(); });
+
+  /** Tamano de casilla: que el mapa quepa a lo ancho si se puede, sin bajar de lo que se puede tocar. */
+  function fitMap() {
+    if (!ed.grid) return;
+    const box = $("ed-map-scroll").clientWidth - 2 || 600;
+    const touch = window.TouchControls.isTouchDevice();
+    ed.size = Math.max(touch ? 14 : 9, Math.min(30, Math.floor(box / ed.grid[0].length)));
+    paintMap();
+  }
+
+  async function openEditor(id) {
+    const level = await fetchLevel(id);
+    if (!level) { toast({ kind: "error", title: "No se pudo abrir", text: "Ese juego ya no existe." }); return; }
+    ed.level = level;
+    ed.undo = [];
+    ed.redo = [];
+    ed.hover = null;
+    const editable = Boolean(EDITABLE[level.layout]) && Array.isArray(level.grid);
+    ed.grid = editable ? cloneGrid(level.grid) : null;
+    ed.original = editable ? cloneGrid(level.grid) : null;
+    ed.tool = editable ? "wall" : null;
+
+    $("editor-sub").textContent = level.layout === "custom" ? "Juego libre" : genreLabel(level.tag) + (level.width ? ` · ${level.width}×${level.height}` : "");
+    $("ed-title").value = level.narrative.title;
+    $("ed-story").value = level.narrative.story || "";
+    updateStoryCount();
+    $("ed-error").textContent = "";
+    $$("#editor .field").forEach((f) => f.classList.remove("invalid"));
+    $("ed-tools-wrap").hidden = !editable;
+    $("ed-map-section").hidden = !editable;
+    $("ed-nomap").hidden = editable;
+    $("ed-nomap-text").textContent = level.layout === "custom"
+      ? "Este juego lo escribió la IA a medida: no tiene un mapa de casillas. Puedes cambiar su título y su historia."
+      : "En las carreras el circuito se calcula junto con el recorrido de los rivales, así que el mapa no se puede editar. Puedes cambiar el título y la historia.";
+
+    editor.showModal();
+    if (editable) { fitMap(); renderTools(); syncHistory(); }
+    if (!window.TouchControls.isTouchDevice()) $("ed-title").focus();
+  }
+
+  function updateStoryCount() {
+    $("ed-story-count").textContent = `(${$("ed-story").value.length}/240)`;
+  }
+  $("ed-story").addEventListener("input", updateStoryCount);
+
+  function closeEditor() {
+    if (ed.busy) return;
+    if (dirty() && !confirm("¿Descartar los cambios sin guardar?")) return;
+    editor.close();
+  }
+  $("editor-close").addEventListener("click", closeEditor);
+  $("ed-cancel").addEventListener("click", closeEditor);
+  editor.addEventListener("cancel", (event) => { event.preventDefault(); closeEditor(); });
+  editor.addEventListener("close", () => { ed.level = null; ed.grid = null; });
+  window.addEventListener("resize", () => { if (editor.open) fitMap(); });
+
+  // El juego escucha el teclado en toda la ventana: mientras se edita no debe moverse ni reiniciarse.
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") return;
+    const typing = /INPUT|TEXTAREA/.test(event.target.tagName);
+    if (!typing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) stepHistory(ed.redo, ed.undo); else stepHistory(ed.undo, ed.redo);
+    }
+    event.stopPropagation();
+  });
+
+  $("editor-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (ed.busy || !ed.level) return;
+    const level = ed.level;
+    const body = {};
+    const title = $("ed-title").value.trim();
+    const story = $("ed-story").value.trim();
+    if (title !== level.narrative.title) body.title = title;
+    if (story !== (level.narrative.story || "")) body.story = story;
+    if (ed.grid && mapChanged()) body.rows = rowsOf(ed.grid);
+    $$("#editor .field").forEach((f) => f.classList.remove("invalid"));
+    if (!title) { $("ed-title-field").classList.add("invalid"); $("ed-error").textContent = "El título no puede quedar vacío."; return; }
+    if (!Object.keys(body).length) { editor.close(); return; }
+
+    ed.busy = true;
+    $("ed-save").setAttribute("aria-busy", "true");
+    $("ed-save").textContent = "Guardando…";
+    try {
+      const res = await fetch("/api/levels/" + encodeURIComponent(level.id), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) { ed.busy = false; editor.close(); showAuth(); return; }
+      if (!res.ok) {
+        if (data.field === "title" || data.field === "story") $(`ed-${data.field}-field`).classList.add("invalid");
+        throw new Error(data.error || "No se pudieron guardar los cambios.");
+      }
+      levelCache.set(data.id, data);
+      shots.delete("lv:" + data.id);
+      storage.remove(snapKey(data.id));
+      mine = mine.map((m) => (m.id === data.id ? { ...m, title: data.narrative.title } : m));
+      renderMine();
+      ed.busy = false;
+      editor.close();
+      if (current && current.id === data.id) playLevel(data);
+      toast({ kind: "success", title: "Cambios guardados", text: body.rows ? "El mapa nuevo ya se puede jugar." : "«" + data.narrative.title + "» quedó actualizado." });
+    } catch (err) {
+      $("ed-error").textContent = err.message === "Failed to fetch" ? "Sin conexión. Revisa tu red e inténtalo de nuevo." : err.message;
+    } finally {
+      ed.busy = false;
+      $("ed-save").removeAttribute("aria-busy");
+      $("ed-save").textContent = "Guardar cambios";
+    }
+  });
+
+  $("edit-level").addEventListener("click", () => { if (current && current.id) openEditor(current.id); });
 
   /* ================= Ajustes ================= */
 
