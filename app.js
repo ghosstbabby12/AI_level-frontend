@@ -24,6 +24,8 @@
     $("icon-moon").toggleAttribute("hidden", dark);
     $("theme-toggle").setAttribute("aria-label", dark ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
     $$("[data-theme-choice]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeChoice === themeChoice())));
+    // El color del nivel en juego tiene un tono para claro y otro para oscuro (lo repinta el modo juego).
+    document.dispatchEvent(new Event("app-theme"));
   }
 
   function setTheme(choice) {
@@ -626,7 +628,11 @@
   });
   document.addEventListener("keydown", (event) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
-    if (event.key === "/" && !typing && !$("search-wrap").hidden) { event.preventDefault(); search.focus(); }
+    if (event.key === "/" && !typing && document.body.classList.contains("app-on") && !document.querySelector("dialog[open]")) {
+      event.preventDefault();
+      if (currentView !== "mine") go("mine");
+      search.focus();
+    }
   });
 
   /* ================= Vistas ================= */
@@ -637,6 +643,7 @@
 
   function showView(view) {
     currentView = view;
+    document.body.classList.toggle("playing", view === "create" && $("create-view").classList.contains("playing"));
     $$("[data-panel-view]").forEach((p) => (p.hidden = p.dataset.panelView !== view));
     updateFab();
     // Las vistas ocultas miden 0 de ancho: al mostrarlas se recalcula el desvanecido.
@@ -728,6 +735,8 @@
   }
 
   function renderNotifs() {
+    // La campana solo aparece cuando hay avisos de verdad (juegos libres terminados).
+    $("bell-wrap").hidden = !document.body.classList.contains("app-on") || notifs.length === 0;
     const unread = notifs.filter((n) => !n.read).length;
     $("bell-count").hidden = unread === 0;
     $("bell-count").textContent = String(unread);
@@ -822,7 +831,37 @@
 
   /* ================= Progreso por etapas ================= */
 
-  const STAGES_FAST = ["Interpretar tu idea", "Preparar el juego"];
+  const STAGES_FAST = ["Interpretar tu idea", "Construir el nivel", "Comprobar que se gana"];
+
+  // Mientras responde el servidor (uno o dos segundos), el progreso cuenta lo que se esta armando
+  // con las palabras del pedido: "Creando el bosque…", "Colocando manzanas…".
+  const PLACES = [
+    [/bosque|selva|jungla/, "el bosque"], [/hielo|nieve|glaciar|helad/, "el mundo de hielo"], [/lava|volc[aá]n|fuego/, "el volcán"],
+    [/desierto|arena|duna/, "el desierto"], [/castillo|mazmorra|cripta|calabozo/, "la mazmorra"], [/espacio|galaxia|planeta|nave/, "el espacio"],
+    [/mar|oc[eé]ano|agua|submarin/, "el fondo del mar"], [/cueva|caverna|mina/, "la cueva"], [/carrera|circuito|pista/, "el circuito"],
+    [/laberinto/, "el laberinto"],
+  ];
+  const THINGS = [
+    [/manzanas?/, "manzanas"], [/monedas?/, "monedas"], [/gemas?|cristal/, "gemas"], [/llaves?/, "llaves"], [/estrellas?/, "estrellas"],
+    [/pociones|poci[oó]n/, "pociones"], [/frutas?/, "frutas"], [/trampas?|pinchos/, "trampas"], [/enemigos?|monstruos?|zombis?|fantasmas?/, "enemigos"],
+    [/jefe|drag[oó]n|boss/, "al jefe final"],
+  ];
+  let fastTimers = [];
+
+  function fastStages(description) {
+    const text = description.toLowerCase();
+    const place = (PLACES.find(([re]) => re.test(text)) || [null, "el escenario"])[1];
+    const things = THINGS.filter(([re]) => re.test(text)).map(([, label]) => label).slice(0, 2);
+    const steps = [
+      [600, 1, "Creando " + place + "…"],
+      [1300, 1, things.length ? "Colocando " + things.join(" y ") + "…" : "Colocando peligros y recompensas…"],
+      [2000, 2, "Comprobando que se pueda ganar…"],
+    ];
+    const startedAt = Date.now();
+    fastTimers.forEach(clearTimeout);
+    fastTimers = steps.map(([ms, index, text]) =>
+      setTimeout(() => { if (generating) renderProgress({ title: "Generando tu juego", stages: STAGES_FAST, index, text, startedAt }); }, ms));
+  }
   const STAGES_CUSTOM = ["Interpretar", "Escribir", "Revisar", "Guardar"];
   let progressTimer = null;
 
@@ -846,6 +885,7 @@
 
   function hideProgress() {
     clearInterval(progressTimer);
+    fastTimers.forEach(clearTimeout);
     $("progress").hidden = true;
   }
 
@@ -1109,6 +1149,7 @@
     if (currentView !== "create") go("create");
     shownJob = null;
     renderProgress({ title: "Generando tu juego", stages: STAGES_FAST, index: 0, text: "Interpretando lo que pediste…", startedAt: Date.now() });
+    fastStages(description);
     try {
       const res = await fetch("/api/levels/generate", {
         method: "POST",
@@ -1197,16 +1238,285 @@
     keywords: { className: "keywords", text: "Modo sin IA", icon: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>', title: "Interpretado por palabras clave, sin IA: puede que el resultado sea menos preciso." },
   };
 
-  function playLevel(level) {
+  /* ---------- Modo juego ---------- */
+
+  // Color de acento de cada ambiente: cada juego se siente distinto (y la linea ya no parece un error).
+  const THEME_COLOR = {
+    forest: ["#22c55e", "#15803d"], ice: ["#38bdf8", "#0369a1"], lava: ["#f97316", "#c2410c"], desert: ["#eab308", "#a16207"],
+    dungeon: ["#a78bfa", "#6d28d9"], overworld: ["#84cc16", "#4d7c0f"], water: ["#06b6d4", "#0e7490"], space: ["#818cf8", "#4338ca"],
+  };
+  const THEME_NAME = { forest: "Bosque", ice: "Hielo", lava: "Lava", desert: "Desierto", dungeon: "Mazmorra", overworld: "Mundo abierto", water: "Submarino", space: "Espacio" };
+  const isDark = () => currentTheme() === "dark";
+  document.addEventListener("app-theme", () => { if (current) paintLevelTheme(current); });
+
+  function paintLevelTheme(level) {
+    const view = $("create-view");
+    const colors = level && THEME_COLOR[level.theme];
+    if (!colors) { view.style.removeProperty("--lvl"); view.style.removeProperty("--lvl-ink"); return; }
+    view.style.setProperty("--lvl", colors[0]);
+    // En claro, el texto con el color del tema necesita el tono oscuro para leerse bien.
+    view.style.setProperty("--lvl-ink", isDark() ? colors[0] : colors[1]);
+  }
+
+  /** Portada (saludo y pedido centrado) o modo juego (lienzo, panel y pedido compacto). */
+  function setPlaying(on) {
+    $("create-view").classList.toggle("playing", on);
+    document.body.classList.toggle("playing", on && currentView === "create");
+  }
+
+  // Juegos abiertos en esta sesion: "Anterior" vuelve al de antes sin perder nada.
+  const levelHistory = [];
+
+  function renderBack() {
+    const prev = levelHistory[levelHistory.length - 1];
+    $("back-level").hidden = !prev;
+    if (prev) {
+      $("back-label").textContent = prev.narrative ? prev.narrative.title : "Anterior";
+      $("back-level").title = "Volver a «" + $("back-label").textContent + "»";
+    }
+  }
+
+  $("back-level").addEventListener("click", () => {
+    const prev = levelHistory.pop();
+    if (prev) playLevel(prev, { fromHistory: true });
+  });
+
+  function closeGame() {
+    stopWatching();
+    if (game) game.destroy();
+    game = null;
+    window.TouchControls.detach();
+    hideCustomGame();
+    current = null;
+    levelHistory.length = 0;
+    $("result").hidden = true;
+    $("story").hidden = true;
+    closeChipEditor();
+    setPlaying(false);
+    paintLevelTheme(null);
+    window.scrollTo({ top: 0 });
+    if (!window.TouchControls.isTouchDevice()) input.focus();
+  }
+  $("close-game").addEventListener("click", closeGame);
+
+  // Jugando, al escribir otro pedido se avisa de que el juego actual no se pierde.
+  input.addEventListener("focus", () => $("play-note").classList.add("show"));
+  input.addEventListener("blur", () => $("play-note").classList.remove("show"));
+
+  /** Linea de datos del nivel: "Nivel 2 · Laberinto · Hielo · 25×25". */
+  function levelMeta(level) {
+    const parts = [];
+    const read = (key) => {
+      const chip = (level.interpretation || []).find((c) => c.startsWith(key + ": "));
+      return chip ? chip.slice(key.length + 2) : null;
+    };
+    if (level.stage) parts.push("Nivel " + level.stage);
+    parts.push(level.layout === "custom" ? "Juego libre" : read("Tipo") || genreLabel(level.tag) || "");
+    if (THEME_NAME[level.theme]) parts.push(THEME_NAME[level.theme]);
+    const size = read("Tamano");
+    if (size) parts.push(size.replace("x", "×"));
+    return parts.filter(Boolean).join(" · ");
+  }
+
+  /* ---------- Ajustes editables (chips) ---------- */
+
+  const PENCIL = svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>');
+  const DIFF_LABEL = { easy: "Fácil", normal: "Normal", hard: "Difícil" };
+  let chipOpen = null;
+  let remixing = false;
+
+  const settingText = (s) => (s.kind === "choice" ? DIFF_LABEL[s.value] : s.kind === "toggle" ? (s.value ? "Sí" : "No") : String(s.value));
+
+  function renderChips(level) {
+    closeChipEditor();
+    const settings = Array.isArray(level.settings) ? level.settings : null;
+    $("chips-note").hidden = !settings;
+    if (!settings) {
+      // Juegos libres y niveles sin ajustes: solo se muestran los datos, sin edicion.
+      const info = (level.interpretation || []).filter((c) => !/^(Tipo|Tema|Nivel|Tamano):/.test(c));
+      $("settings-block").hidden = info.length === 0;
+      $("chips").replaceChildren(...info.map((text) => {
+        const [k, ...v] = text.split(": ");
+        const chip = document.createElement("span");
+        chip.className = "set-chip static";
+        chip.innerHTML = '<span class="k"></span><span class="v"></span>';
+        chip.querySelector(".k").textContent = v.length ? k : "";
+        chip.querySelector(".v").textContent = v.length ? v.join(": ") : k;
+        return chip;
+      }));
+      return;
+    }
+    $("settings-block").hidden = false;
+    $("chips").replaceChildren(...settings.map((setting) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "set-chip";
+      chip.setAttribute("aria-expanded", "false");
+      chip.innerHTML = '<span class="k"></span><span class="v"><b></b>' + PENCIL + "</span>";
+      chip.querySelector(".k").textContent = setting.label;
+      chip.querySelector("b").textContent = settingText(setting);
+      chip.setAttribute("aria-label", "Cambiar " + setting.label + " (ahora: " + settingText(setting) + ")");
+      chip.addEventListener("click", () => (chipOpen && chipOpen.chip === chip ? closeChipEditor() : openChipEditor(setting, chip)));
+      return chip;
+    }));
+  }
+
+  function closeChipEditor() {
+    if (chipOpen) chipOpen.chip.setAttribute("aria-expanded", "false");
+    chipOpen = null;
+    $("chip-editor").hidden = true;
+    $("chip-editor").replaceChildren();
+  }
+
+  function openChipEditor(setting, chip) {
+    closeChipEditor();
+    chipOpen = { setting, chip, value: setting.value };
+    chip.setAttribute("aria-expanded", "true");
+    const box = $("chip-editor");
+    const title = document.createElement("strong");
+    title.textContent = setting.label;
+    const row = document.createElement("div");
+    row.className = "row";
+
+    if (setting.kind === "number") {
+      const stepper = document.createElement("div");
+      stepper.className = "stepper";
+      const minus = document.createElement("button");
+      const plus = document.createElement("button");
+      const field = document.createElement("input");
+      minus.type = plus.type = "button";
+      minus.textContent = "−";
+      plus.textContent = "+";
+      minus.setAttribute("aria-label", "Menos");
+      plus.setAttribute("aria-label", "Más");
+      field.type = "number";
+      field.inputMode = "numeric";
+      field.min = setting.min;
+      field.max = setting.max;
+      field.value = setting.value;
+      field.setAttribute("aria-label", setting.label);
+      const clamp = (n) => Math.min(setting.max, Math.max(setting.min, n));
+      const set = (n) => { chipOpen.value = clamp(n); field.value = chipOpen.value; };
+      minus.addEventListener("click", () => set(Number(field.value) - 1));
+      plus.addEventListener("click", () => set(Number(field.value) + 1));
+      field.addEventListener("input", () => { if (field.value !== "") chipOpen.value = clamp(Math.round(Number(field.value))); });
+      field.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyChip(); } });
+      stepper.append(minus, field, plus);
+      const range = document.createElement("span");
+      range.className = "side-note";
+      range.style.margin = "0";
+      range.textContent = `De ${setting.min} a ${setting.max}`;
+      row.append(stepper, range);
+      setTimeout(() => field.select(), 0);
+    } else {
+      const options = setting.kind === "choice" ? setting.options : [{ value: true, label: "Sí" }, { value: false, label: "No" }];
+      const group = document.createElement("div");
+      group.className = "seg-choice";
+      for (const option of options) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = option.label;
+        b.setAttribute("aria-pressed", String(option.value === chipOpen.value));
+        b.addEventListener("click", () => {
+          chipOpen.value = option.value;
+          group.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        });
+        group.append(b);
+      }
+      row.append(group);
+    }
+
+    const err = document.createElement("p");
+    err.className = "err";
+    err.id = "chip-error";
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn-ghost btn-sm";
+    cancel.textContent = "Cancelar";
+    cancel.addEventListener("click", closeChipEditor);
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "btn btn-primary btn-sm";
+    apply.id = "chip-apply";
+    apply.textContent = "Crear variante";
+    apply.addEventListener("click", applyChip);
+    actions.append(cancel, apply);
+    box.replaceChildren(title, row, err, actions);
+    box.hidden = false;
+  }
+
+  async function applyChip() {
+    if (!chipOpen || !current || remixing) return;
+    const { setting, value } = chipOpen;
+    if (value === setting.value) { closeChipEditor(); return; }
+    remixing = true;
+    $("chip-apply").setAttribute("aria-busy", "true");
+    $("chip-apply").textContent = "Creando…";
+    try {
+      const res = await fetch(`/api/levels/${encodeURIComponent(current.id)}/remix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [setting.key]: value }),
+      });
+      const level = await res.json().catch(() => ({}));
+      if (res.status === 401) { showAuth(); return; }
+      if (!res.ok) throw new Error(level.error || "No se pudo crear la variante.");
+      if (level.saved) {
+        levelCache.set(level.id, level);
+        addMine({ id: level.id, title: level.narrative.title, description: level.description, label: genreLabel(level.tag), tag: level.tag, layout: level.layout, createdAt: level.createdAt });
+      }
+      playLevel(level);
+      toast({ kind: "success", title: `${setting.label}: ${settingText({ ...setting, value })}`, text: "Variante lista. Con «Anterior» vuelves al juego de antes." });
+    } catch (err) {
+      const box = $("chip-error");
+      if (box) box.textContent = err.message === "Failed to fetch" ? "Sin conexión. Inténtalo de nuevo." : err.message;
+    } finally {
+      remixing = false;
+      const apply = $("chip-apply");
+      if (apply) { apply.removeAttribute("aria-busy"); apply.textContent = "Crear variante"; }
+    }
+  }
+
+  /* ---------- Reto compartido ---------- */
+
+  // ?reto=<puntos> llega con el enlace de quien comparte: se muestra y se celebra al superarlo.
+  const challenges = new Map();
+  const bestKey = (level) => "best:" + (level.id || "ejemplo:" + level.layout);
+
+  function renderChallenge(level) {
+    const goal = challenges.get(level.id);
+    $("challenge").hidden = !goal;
+    if (goal) $("challenge").textContent = `🏆 Reto: supera ${goal.toLocaleString("es")} puntos`;
+  }
+
+  function checkChallenge(score) {
+    const goal = current && challenges.get(current.id);
+    if (!goal || score <= goal) return;
+    challenges.delete(current.id);
+    renderChallenge(current);
+    toast({ kind: "success", title: "¡Reto superado!", text: `Hiciste ${score.toLocaleString("es")} puntos: más que los ${goal.toLocaleString("es")} del reto.` });
+  }
+
+  function playLevel(level, { fromHistory = false } = {}) {
+    if (current && current !== level && current.id !== level.id && !fromHistory) {
+      levelHistory.push(current);
+      if (levelHistory.length > 20) levelHistory.shift();
+    }
     current = level;
     lastOpenedAt = Date.now();
     showError("");
     if (currentView !== "create") go("create");
+    setPlaying(true);
+    paintLevelTheme(level);
+    renderBack();
 
     // Titulo, historia y frase del jefe (niveles de un backend antiguo pueden no traerla).
     const story = level.narrative;
     $("story").hidden = !story;
     if (story) {
+      $("story-meta").textContent = levelMeta(level);
       $("story-title").textContent = story.title;
       $("story-text").textContent = story.story;
       $("story-boss").textContent = story.bossLine ? `«${story.bossLine}»` : "";
@@ -1223,23 +1533,18 @@
     }
     $("story-note").textContent = level.adaptationNote || "";
     $("story-note").hidden = !level.adaptationNote;
-
-    $("chips").replaceChildren(...(level.interpretation || []).map((text) => {
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.textContent = text;
-      return chip;
-    }));
+    renderChips(level);
+    renderChallenge(level);
 
     // Los ejemplos no estan guardados: no tienen imagen ni enlace propio.
     const saved = Boolean(level.id) && !String(level.id).startsWith("ejemplo-");
     $("share").hidden = !saved;
     $("edit-level").hidden = !mine.some((m) => m.id === level.id);
-    $("share-label").textContent = "Compartir";
+    $("share-label").textContent = "Retar";
     if (saved && level.imageUrl) $("image").src = level.imageUrl;
     const custom = level.layout === "custom";
     document.querySelector('[data-tab="image"]').hidden = !saved || custom;
-    document.querySelector('[data-tab="ascii"]').hidden = custom;
+    document.querySelector('[data-tab="ascii"]').hidden = custom || !level.ascii;
     $("ascii").textContent = level.ascii || "";
     $("hint").textContent = level.controls || "";
 
@@ -1247,20 +1552,35 @@
     stopWatching();
     if (game) game.destroy();
     game = null;
+    $("ready").hidden = true;
     if (custom) {
       window.TouchControls.detach();
       showCustomGame(level);
     } else {
       hideCustomGame();
-      game = window.LevelGame.create(canvas, level);
+      game = window.LevelGame.create(canvas, level, { waitStart: true });
       const touchHint = window.TouchControls.attach(game, level, canvas, $("touch-controls"));
       if (touchHint) $("hint").textContent = touchHint;
+      showReady(level);
       watchGame();
     }
     showTab("play");
-    // En un telefono interesa ver el juego y sus controles; la historia queda justo encima.
+    // Escritorio: todo cabe en la ventana. Telefono: el juego arriba, a ancho completo.
     const onTouch = window.TouchControls.isTouchDevice();
-    (onTouch ? document.querySelector('[data-panel="play"]') : $("story")).scrollIntoView({ behavior: "smooth", block: onTouch ? "center" : "start" });
+    if (window.matchMedia("(min-width: 901px)").matches) window.scrollTo({ top: 0 });
+    else document.querySelector('[data-panel="play"]').scrollIntoView({ behavior: "smooth", block: onTouch ? "start" : "start" });
+  }
+
+  /** "Pulsa una flecha para empezar", con los controles del estilo a la vista. */
+  function showReady(level) {
+    const touch = window.TouchControls.isTouchDevice();
+    const pointer = level.layout === "shooter";
+    $("ready-cta").textContent = touch
+      ? (pointer ? "Toca la pantalla para empezar" : "Usa un control para empezar")
+      : (pointer ? "Haz clic o pulsa una flecha para empezar" : "Pulsa una flecha para empezar");
+    $("ready-keys").hidden = touch;
+    $("ready-controls").textContent = $("hint").textContent;
+    $("ready").hidden = false;
   }
 
   /* ================= Game Over ================= */
@@ -1291,6 +1611,7 @@
     roundStart = performance.now();
     const tick = () => {
       if (!game) return;
+      if (!$("ready").hidden && !game.waiting) $("ready").hidden = true;
       const status = game.state && game.state.status;
       if (status !== lastStatus) {
         if (status === "lost" || status === "won") {
@@ -1323,7 +1644,7 @@
   /** Guarda el record de este nivel y devuelve los numeros que muestran las dos pantallas. */
   function roundResult() {
     const score = Math.max(0, Math.round(game.state.score || 0));
-    const key = "best:" + (current.id || "ejemplo:" + current.layout);
+    const key = bestKey(current);
     const best = Number(storage.get(key)) || 0;
     const record = score > best;
     if (record) storage.set(key, String(score));
@@ -1334,6 +1655,7 @@
     if (!game || !current) return;
     const state = game.state;
     const { score, best, record } = roundResult();
+    checkChallenge(score);
     $("go-reason").textContent = lossReason(state);
     $("go-score").textContent = score.toLocaleString("es");
     $("go-time").textContent = formatTime(elapsed);
@@ -1352,6 +1674,7 @@
   function showVictory(elapsed) {
     if (!game || !current) return;
     const { score, best, record } = roundResult();
+    checkChallenge(score);
     const stage = stageOf(current);
     $("vc-kicker").textContent = `Nivel ${stage} superado`;
     $("vc-next").textContent = `Sigue el nivel ${stage + 1}: más enemigos, más peligros y un mapa más grande.`;
@@ -1423,7 +1746,8 @@
   document.addEventListener("keydown", (event) => {
     const open = !$("gameover").hidden || !$("victory").hidden;
     if (event.key === "Escape" && open) { hideGameOver(); canvas.focus({ preventScroll: true }); }
-    if ((event.key === "n" || event.key === "N") && !$("victory").hidden && !event.metaKey && !event.ctrlKey) playNextLevel();
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.target.isContentEditable;
+    if ((event.key === "n" || event.key === "N") && !typing && !$("victory").hidden && !event.metaKey && !event.ctrlKey) playNextLevel();
   });
 
   $("restart").addEventListener("click", () => {
@@ -1432,13 +1756,15 @@
   });
   $("regen").addEventListener("click", generate);
 
-  async function shareLink(id, title) {
-    const url = location.origin + location.pathname + "?nivel=" + encodeURIComponent(id);
+  /** Enlace al juego; con un record propio, lleva el reto ("supera mis 240 puntos"). */
+  async function shareLink(id, title, best = 0) {
+    const url = location.origin + location.pathname + "?nivel=" + encodeURIComponent(id) + (best > 0 ? "&reto=" + best : "");
+    const text = best > 0 ? `¿Superas mis ${best.toLocaleString("es")} puntos en «${title}»?` : `Juega «${title}» en Artificial Levels.`;
     try {
-      if (navigator.share && window.TouchControls.isTouchDevice()) await navigator.share({ title, url });
+      if (navigator.share && window.TouchControls.isTouchDevice()) await navigator.share({ title, text, url });
       else {
-        await navigator.clipboard.writeText(url);
-        toast({ kind: "success", title: "Enlace copiado", text: "Cualquiera con el enlace y una cuenta puede jugar «" + title + "»." });
+        await navigator.clipboard.writeText(best > 0 ? text + " " + url : url);
+        toast({ kind: "success", title: best > 0 ? "Reto copiado" : "Enlace copiado", text: best > 0 ? "Pégalo donde quieras: «" + text + "»" : "Cualquiera con el enlace y una cuenta puede jugar «" + title + "»." });
       }
     } catch (err) {
       if (err && err.name === "AbortError") return;
@@ -1447,13 +1773,16 @@
   }
 
   $("share").addEventListener("click", () => {
-    if (current && current.id) shareLink(current.id, current.narrative ? current.narrative.title : "Artificial Levels");
+    if (current && current.id) shareLink(current.id, current.narrative ? current.narrative.title : "Artificial Levels", Number(storage.get(bestKey(current))) || 0);
   });
 
   // Un enlace ?nivel=<id> abre ese juego en cuanto hay sesion.
   async function openSharedLevel() {
-    const id = new URLSearchParams(location.search).get("nivel");
+    const params = new URLSearchParams(location.search);
+    const id = params.get("nivel");
     if (!id) return;
+    const goal = Math.floor(Number(params.get("reto")));
+    if (goal > 0 && goal < 1e9) challenges.set(id, goal);
     history.replaceState(null, "", location.pathname + location.hash);
     const level = await fetchLevel(id);
     if (level) playLevel(level);
@@ -1821,7 +2150,6 @@
 
   const settings = $("settings");
   const openSettings = () => { closePopover(); paintTheme(); settings.showModal(); };
-  $("open-settings").addEventListener("click", openSettings);
   $$("[data-open-settings]").forEach((b) => b.addEventListener("click", openSettings));
   $("settings-close").addEventListener("click", () => settings.close());
   settings.addEventListener("click", (event) => { if (event.target === settings) settings.close(); });
@@ -2182,8 +2510,7 @@
   function setChrome(on) {
     document.body.classList.toggle("app-on", on);
     $("sidebar").hidden = !on;
-    $("search-wrap").hidden = !on;
-    $("bell-wrap").hidden = !on;
+    renderNotifs();
     $("user-wrap").hidden = !on;
     updateFab();
   }
@@ -2266,13 +2593,16 @@
     $("result").hidden = true;
     $("story").hidden = true;
     $("chips").replaceChildren();
+    current = null;
+    levelHistory.length = 0;
+    setPlaying(false);
+    paintLevelTheme(null);
     search.value = "";
     filter.q = "";
     setAuthMode("login");
     showAuth();
   }
   $("logout").addEventListener("click", logout);
-  $("side-logout").addEventListener("click", logout);
 
   /* ================= Arranque ================= */
 

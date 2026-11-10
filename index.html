@@ -25,7 +25,7 @@
       --border-strong: #d2d6e2;
       --text: #131722;
       --muted: #5b6377;
-      --faint: #8a91a4;
+      --faint: #62697d;
       --accent: #1c1e24;
       --accent-2: #4b5262;
       --accent-ink: #22252d;
@@ -54,7 +54,7 @@
         --bg: #0a0b0e; --glow-1: rgba(150, 170, 210, .1); --glow-2: rgba(255, 255, 255, .04);
         --surface: #11141c; --surface-2: #161a24; --surface-3: #1e2331; --overlay: rgba(17, 20, 28, .8);
         --border: rgba(255, 255, 255, .07); --border-strong: rgba(255, 255, 255, .13);
-        --text: #eceef6; --muted: #9097ab; --faint: #677086;
+        --text: #eceef6; --muted: #a3aabd; --faint: #8c94a8;
         --accent: #eceef3; --accent-2: #a3acbd; --accent-ink: #dde1e9; --accent-soft: rgba(255, 255, 255, .07); --glow: rgba(190, 205, 235, .22); --cool: #7cc4ff;
         --hot: #ef5a6f; --success: #34d399; --danger: #ff6b81; --field: #0c0d11; --on-accent: #0c0d11;
       --spot: rgba(255, 255, 255, .1);
@@ -71,7 +71,7 @@
       --bg: #0a0b0e; --glow-1: rgba(150, 170, 210, .1); --glow-2: rgba(255, 255, 255, .04);
       --surface: #11141c; --surface-2: #161a24; --surface-3: #1e2331; --overlay: rgba(17, 20, 28, .8);
       --border: rgba(255, 255, 255, .07); --border-strong: rgba(255, 255, 255, .13);
-      --text: #eceef6; --muted: #9097ab; --faint: #677086;
+      --text: #eceef6; --muted: #a3aabd; --faint: #8c94a8;
       --accent: #eceef3; --accent-2: #a3acbd; --accent-ink: #dde1e9; --accent-soft: rgba(255, 255, 255, .07); --glow: rgba(190, 205, 235, .22); --cool: #7cc4ff;
       --hot: #ef5a6f; --success: #34d399; --danger: #ff6b81; --field: #0c0d11; --on-accent: #0c0d11;
       --spot: rgba(255, 255, 255, .1);
@@ -203,13 +203,13 @@
     }
     .nav svg { width: 20px; height: 20px; }
     .nav a:hover, .nav button:hover { background: var(--surface-2); color: var(--text); }
-    .nav a.active { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 8px 20px var(--glow); }
+    .nav a.active { color: var(--text); background: var(--surface-3); box-shadow: inset 3px 0 0 var(--accent-ink); }
     .nav .badge {
       margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center;
       font-size: 11px; font-weight: 750; color: #fff; background: var(--hot);
     }
     .nav .badge.soft { color: var(--accent-ink); background: var(--accent-soft); }
-    .nav a.active .badge { color: #fff; background: rgba(255, 255, 255, .24); }
+    .nav a.active .badge.soft { color: var(--text); background: var(--surface); }
     .side-spacer { flex: 1; }
     .side-card { margin: 8px 4px; padding: 14px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); }
     .side-card strong { display: block; font-size: 13px; }
@@ -433,7 +433,7 @@
     .btn-command kbd { color: var(--on-accent); background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .25); box-shadow: none; }
     .prompt-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 4px 0; color: var(--muted); font-size: 13px; }
     .prompt-foot .tips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-    .tip { padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--border-strong); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .tip { padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--border-strong); background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; font-style: italic; }
     .tip:hover { color: var(--text); border-style: solid; }
 
     /* Cupo diario de juegos libres, como una barra de vida */
@@ -508,6 +508,9 @@
     .genres.overflowing { mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
     .genres.overflowing.at-end { mask-image: none; -webkit-mask-image: none; }
     .tool-right { display: flex; gap: 8px; align-items: center; flex: none; }
+    /* El buscador vive en Mis juegos, junto a ordenar: con pocos juegos no necesita la barra superior. */
+    .tool-right .search { flex: none; width: 230px; height: 40px; }
+    @media (max-width: 900px) { .toolbar { flex-wrap: wrap; } .tool-right { width: 100%; } .tool-right .search { flex: 1; width: auto; } }
     .select {
       height: 38px; padding: 0 32px 0 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 600;
       appearance: none; -webkit-appearance: none;
@@ -580,9 +583,9 @@
 
     /* ---------- Resultado ---------- */
     .story { position: relative; overflow: hidden; margin-top: 24px; padding: 20px 24px 20px 28px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); }
-    .story::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: linear-gradient(to bottom, var(--accent), var(--hot)); }
+    .story::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--lvl, var(--accent-2)); }
     .story-kicker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .story-kicker > span:first-child { font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-ink); }
+    .story-kicker > span:first-child { font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--lvl-ink, var(--accent-ink)); }
     .source-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
     .source-chip svg { width: 13px; height: 13px; }
     .source-chip.ai { color: var(--accent-ink); background: var(--accent-soft); }
@@ -807,7 +810,7 @@
     /* Genero activo: borde iluminado y un punto de luz frio, como un indicador encendido */
     .genre[aria-pressed="true"] { color: var(--text); border-color: var(--edge); background: var(--surface-2); box-shadow: var(--lift-hover), 0 0 0 3px var(--accent-soft); }
     .genre[aria-pressed="true"] svg { color: var(--cool); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cool) 60%, transparent)); }
-    .nav a.active { color: var(--on-accent); background: linear-gradient(180deg, var(--accent), var(--accent-2)); box-shadow: var(--lift-hover), inset 0 1px 0 rgba(255, 255, 255, .3); }
+    .nav a.active { color: var(--text); background: var(--surface-3); box-shadow: inset 3px 0 0 var(--accent-ink); }
     .nav a svg, .nav button svg { transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
     .nav a:hover svg, .nav button:hover svg { transform: translateX(2px) scale(1.08); }
     .avatar { background: linear-gradient(180deg, var(--accent), var(--accent-2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); }
@@ -867,6 +870,139 @@
       *, *::before, *::after { animation-duration: .01ms !important; transition: none !important; }
       .featured { scroll-behavior: auto; }
     }
+
+    /* ================= Crear: portada y modo juego ================= */
+    /* Color del nivel en juego: lo pone app.js segun el tema (verde bosque, celeste hielo...). */
+    .create { --lvl: var(--accent-2); --lvl-ink: var(--accent-ink); }
+
+    /* Portada: saludo grande y pedido centrado */
+    .create:not(.playing) .hero { text-align: center; margin: clamp(8px, 7vh, 72px) auto 26px; max-width: 720px; }
+    .hero h1 { margin: 0; font-size: clamp(30px, 4.4vw, 46px); line-height: 1.08; letter-spacing: -.035em; }
+    .hero p { margin: 10px 0 0; color: var(--muted); font-size: 16px; }
+    .create:not(.playing) .prompt-zone { max-width: 760px; margin: 0 auto; }
+    .create:not(.playing) .prompt-foot { justify-content: center; }
+    .create:not(.playing) .prompt-foot .tips { justify-content: center; }
+    .play-note { display: none; }
+
+    /* Modo juego: sin saludo ni portada; el pedido es una barra compacta */
+    .create.playing .hero, .create.playing .discover { display: none; }
+    .create.playing .prompt-zone { display: grid; gap: 6px; }
+    .create.playing .prompt-box { padding: 5px 5px 5px 14px; border-radius: 14px; gap: 10px; }
+    .create.playing .prompt-box > svg { width: 18px; height: 18px; }
+    .create.playing .prompt-box input { height: 38px; font-size: 15px; }
+    .create.playing .prompt-foot { display: none; }
+    .create.playing .play-note { display: block; margin: 0 4px; font-size: 12.5px; color: var(--muted); }
+    .create.playing .play-note:not(.show) { display: none; }
+    /* Un solo boton principal por contexto: jugando, Generar pasa a secundario */
+    .create.playing .btn-command { height: 38px; padding: 0 12px 0 14px; font-size: 14px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); box-shadow: none; }
+    .create.playing .btn-command::after { display: none; }
+    .create.playing .btn-command kbd { color: var(--muted); background: var(--surface); border-color: var(--border); }
+    .create.playing .progress { margin-top: 4px; padding: 10px 14px; }
+
+    .play-layout { display: grid; gap: 16px; margin-top: 14px; }
+    .play-main { min-width: 0; }
+    .play-main .panel { border-top: 3px solid var(--lvl); }
+    .stage-box { display: grid; place-items: center; }
+    .stage { width: 100%; }
+    #game:focus-visible { box-shadow: 0 0 0 3px var(--lvl); }
+
+    /* Panel lateral */
+    .play-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .play-side > * { flex: none; }
+    .side-nav { display: flex; align-items: center; gap: 8px; }
+    .side-nav .spacer { flex: 1; }
+    .side-nav #back-label { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+    .play-side .story { margin: 0; padding: 16px 18px 16px 22px; }
+    .play-side .story h2 { font-size: 22px; }
+    .play-side .story p { font-size: 14px; }
+    .side-block h3 { margin: 0 0 8px; font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .side-note { margin: 8px 2px 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+    .side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .side-actions .btn { justify-content: flex-start; }
+    .side-actions kbd { margin-left: auto; }
+    .play-side .tabs { width: 100%; }
+    .play-side .tabs button { flex: 1; }
+    .play-side #hint { margin: 0; font-size: 13px; color: var(--text); line-height: 1.5; }
+    .challenge { margin: 0; padding: 10px 14px; border-radius: 14px; font-size: 14px; font-weight: 650; color: var(--text); background: color-mix(in srgb, var(--lvl) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--lvl) 40%, transparent); }
+
+    /* Ajustes editables: clave pequena y valor fuerte, en cajas; las sugerencias de "Prueba" son pildoras punteadas */
+    #chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; }
+    .set-chip {
+      display: inline-grid; gap: 0; padding: 6px 10px 6px 10px; border-radius: 10px; text-align: left; min-width: 0;
+      background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); transition: border-color .15s, box-shadow .15s;
+    }
+    .set-chip .k { font-size: 11px; font-weight: 650; color: var(--muted); line-height: 1.3; }
+    .set-chip .v { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 750; line-height: 1.3; }
+    .set-chip .v svg { width: 12px; height: 12px; color: var(--muted); }
+    button.set-chip:hover { border-color: var(--lvl); }
+    button.set-chip[aria-expanded="true"] { border-color: var(--lvl); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lvl) 25%, transparent); }
+    .set-chip.static { background: var(--surface-2); border-style: dashed; }
+    .chip-editor { margin-top: 10px; padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border-strong); display: grid; gap: 10px; }
+    .chip-editor strong { font-size: 13px; }
+    .chip-editor .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .chip-editor .seg-choice { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+    .chip-editor .seg-choice button { border: 0; padding: 6px 12px; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 650; font-size: 13px; }
+    .chip-editor .seg-choice button[aria-pressed="true"] { color: var(--text); background: var(--surface); box-shadow: var(--shadow-sm); }
+    .stepper { display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; }
+    .stepper button { width: 34px; height: 34px; border: 0; background: var(--surface-2); font-size: 18px; font-weight: 700; }
+    .stepper input { width: 56px; height: 34px; border: 0; text-align: center; font-weight: 750; background: var(--surface); -moz-appearance: textfield; }
+    .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .chip-editor .actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .chip-editor .err { margin: 0; color: var(--danger); font-size: 13px; }
+    .chip-editor .err:empty { display: none; }
+
+    /* Inicio de partida */
+    .ready {
+      position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; padding: 18px; pointer-events: none; border-radius: 14px;
+      background: rgba(5, 6, 10, .35);
+    }
+    .ready-card { text-align: center; color: #fff; max-width: min(520px, 90%); padding: 18px 22px; border-radius: 18px; background: rgba(12, 14, 20, .78); border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .8); }
+    .ready-cta { margin: 0; font-size: clamp(17px, 2.2vw, 22px); font-weight: 800; letter-spacing: -.01em; text-shadow: 0 2px 12px rgba(0, 0, 0, .6); animation: ready-pulse 1.6s ease-in-out infinite; }
+    @keyframes ready-pulse { 50% { opacity: .65; } }
+    @media (prefers-reduced-motion: reduce) { .ready-cta { animation: none; } }
+    .ready-keys { margin: 8px 0 6px; display: flex; gap: 6px; justify-content: center; }
+    .ready-keys kbd { min-width: 30px; height: 30px; display: inline-grid; place-items: center; color: #fff; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .3); box-shadow: none; font-size: 14px; }
+    .ready-controls { margin: 0; font-size: 13px; color: #e5e8ef; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
+
+    /* Escritorio: el juego ocupa la ventana sin scroll; lienzo a la izquierda y panel de 320 px */
+    @media (min-width: 901px) {
+      body.playing .shell { grid-template-columns: 76px minmax(0, 1fr); }
+      body.playing .sidebar { padding: 18px 10px; align-items: center; }
+      body.playing .sidebar .brand { padding: 0 0 14px; }
+      body.playing .sidebar .brand span, body.playing .nav-label, body.playing .nav .label, body.playing .side-card { display: none; }
+      body.playing .nav a { width: 48px; height: 46px; padding: 0; justify-content: center; }
+      body.playing .nav .badge { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; }
+      body.playing .nav-bottom { width: 100%; display: grid; justify-items: center; }
+      body.playing .column { height: 100dvh; min-height: 0; }
+      body.playing main { flex: 1; min-height: 0; max-width: none; padding: 14px 20px 16px; display: flex; flex-direction: column; }
+      body.playing #app-view, body.playing .create { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+      body.playing .play-layout { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 320px; margin-top: 12px; }
+      body.playing .play-main { min-height: 0; display: flex; flex-direction: column; }
+      body.playing .play-main .panel { flex: 1; min-height: 0; padding: 10px; display: flex; flex-direction: column; }
+      body.playing .play-main .panel[data-panel="play"] { padding: 0; background: none; border: 0; }
+      body.playing #game, body.playing .custom-frame { box-shadow: 0 0 0 2px color-mix(in srgb, var(--lvl) 60%, transparent), 0 20px 50px -24px rgba(0, 0, 0, .6); }
+      body.playing .play-main .panel[data-panel="image"], body.playing .play-main .panel[data-panel="ascii"] { display: block; }
+      body.playing .stage-box { flex: 1; min-height: 0; container-type: size; }
+      /* El lienzo cabe entero: el ancho maximo que permite el alto disponible (proporcion 16:10) */
+      body.playing .stage { width: min(100cqw, 160cqh); }
+      body.playing #game, body.playing .custom-frame { width: 100%; max-width: none; max-height: none; }
+      body.playing .play-side { min-height: 0; overflow-y: auto; padding-right: 2px; }
+      body.playing .fab { display: none; }
+    }
+
+    /* Movil: lienzo a ancho completo y el panel debajo */
+    @media (max-width: 900px) {
+      .create.playing .play-main .panel[data-panel="play"] { margin: 0 -18px; padding: 0; border-radius: 0; border-left: 0; border-right: 0; background: #000; }
+      .create.playing #game, .create.playing .custom-frame { border-radius: 0; }
+      .create.playing .gameover, .create.playing .ready { border-radius: 0; }
+      .create.playing .touch-controls { padding: 0 12px 12px; }
+      /* Al llevar el juego a la vista, que no quede debajo de la barra superior fija */
+      .create.playing .play-main .panel[data-panel="play"] { scroll-margin-top: 70px; }
+      .ready-card { padding: 10px 14px; }
+      .ready-cta { font-size: 15px; }
+      .ready-keys, .ready-controls { display: none; }
+      .side-actions { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -885,21 +1021,21 @@
       </a>
       <p class="nav-label">Menú</p>
       <nav class="nav" aria-label="Secciones">
-        <a href="#crear" data-view="create">
+        <a href="#crear" data-view="create" title="Crear">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.8L20 10l-5 3.6L16.5 20 12 16.4 7.5 20 9 13.6 4 10l6.1-1.2z"/></svg>
           <span class="label">Crear</span>
           <span class="badge" id="badge-jobs" title="Juegos en proceso" hidden></span>
         </a>
-        <a href="#mis-juegos" data-view="mine">
+        <a href="#mis-juegos" data-view="mine" title="Mis juegos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M7 10v4M5 12h4M15.5 11h.01M18 13h.01"/></svg>
           <span class="label">Mis juegos</span>
           <span class="badge soft" id="badge-mine" title="Juegos guardados" hidden></span>
         </a>
-        <a href="#ejemplos" data-view="examples">
+        <a href="#ejemplos" data-view="examples" title="Ejemplos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
           <span class="label">Ejemplos</span>
         </a>
-        <a href="#como-funciona" data-view="how">
+        <a href="#como-funciona" data-view="how" title="Cómo funciona">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>
           <span class="label">Cómo funciona</span>
         </a>
@@ -911,18 +1047,10 @@
         <span class="quota-bar" id="quota-card-bar" aria-hidden="true"></span>
       </div>
       <div class="nav nav-bottom">
-        <a href="#perfil" data-view="profile">
+        <a href="#perfil" data-view="profile" title="Mi perfil">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
           <span class="label">Mi perfil</span>
         </a>
-        <button type="button" id="open-settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-          <span class="label">Ajustes</span>
-        </button>
-        <button type="button" id="side-logout">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
-          <span class="label">Salir</span>
-        </button>
       </div>
     </aside>
 
@@ -939,12 +1067,6 @@
           <span>Artificial Levels</span>
         </a>
 
-        <label class="search" id="search-wrap" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <span class="sr-only">Buscar en mis juegos</span>
-          <input id="search" type="search" placeholder="Buscar en mis juegos por título, pedido o género" autocomplete="off" />
-          <kbd aria-hidden="true">/</kbd>
-        </label>
 
         <div class="top-actions">
           <button type="button" class="jobs-pill" id="jobs-pill" hidden>
@@ -1061,27 +1183,27 @@
 
         <div id="app-view" hidden>
           <!-- ===== Crear ===== -->
-          <section data-panel-view="create">
-            <div class="view-head">
-              <div>
-                <h1 id="greeting">¿Qué quieres jugar hoy?</h1>
-                <p>Describe el juego con tus palabras: estilo, ambiente, peligros y dificultad.</p>
+          <section data-panel-view="create" class="create" id="create-view">
+            <!-- Antes de generar: saludo grande y pedido centrado. Al jugar, el pedido queda como barra compacta. -->
+            <div class="hero" id="hero">
+              <h1 id="greeting">¿Qué quieres jugar hoy?</h1>
+              <p>Describe el juego con tus palabras: estilo, ambiente, peligros y dificultad.</p>
+            </div>
+            <div class="prompt-zone">
+              <form class="prompt-box" id="form">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.8L20 10l-5 3.6L16.5 20 12 16.4 7.5 20 9 13.6 4 10l6.1-1.2z"/></svg>
+                <input id="description" placeholder="Ej: mapa tipo Mario Bros con trampas y jefe final" required maxlength="500" aria-label="Describe el juego" autocomplete="off" />
+                <button id="submit" type="submit" class="btn btn-primary btn-command"><span id="submit-label">Generar</span><kbd aria-hidden="true">↵</kbd></button>
+              </form>
+              <div class="prompt-foot">
+                <div class="tips" id="tips"><span>Prueba:</span></div>
+                <span class="quota" id="quota" hidden>
+                  <span id="quota-text"></span>
+                  <span class="quota-bar" id="quota-bar" aria-hidden="true"></span>
+                </span>
               </div>
-            </div>
-            <form class="prompt-box" id="form">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.9 5.8L20 10l-5 3.6L16.5 20 12 16.4 7.5 20 9 13.6 4 10l6.1-1.2z"/></svg>
-              <input id="description" placeholder="Ej: mapa tipo Mario Bros con trampas y jefe final" required maxlength="500" aria-label="Describe el juego" autocomplete="off" />
-              <button id="submit" type="submit" class="btn btn-primary btn-command"><span id="submit-label">Generar</span><kbd aria-hidden="true">↵</kbd></button>
-            </form>
-            <div class="prompt-foot">
-              <div class="tips" id="tips"><span>Prueba:</span></div>
-              <span class="quota" id="quota" hidden>
-                <span id="quota-text"></span>
-                <span class="quota-bar" id="quota-bar" aria-hidden="true"></span>
-              </span>
-            </div>
-            <p id="error" role="alert"></p>
-
+              <p class="play-note" id="play-note">Generar crea un juego nuevo; el actual queda guardado en Mis juegos.</p>
+              <p id="error" role="alert"></p>
             <div class="progress" id="progress" role="status" aria-live="polite" hidden>
               <div class="progress-top"><strong id="progress-title">Generando…</strong><span class="progress-meta"><span class="live-chip" id="progress-live" title="El servidor avisa al instante de cada etapa" hidden><i aria-hidden="true"></i>En vivo</span><span id="progress-time"></span></span></div>
               <div class="segs" id="progress-segs"></div>
@@ -1089,44 +1211,26 @@
               <p id="progress-text"></p>
             </div>
 
-            <article class="story" id="story" hidden>
-              <div class="story-kicker"><span>✦ Nivel generado</span><span class="source-chip" id="source-chip" hidden></span></div>
-              <h2 id="story-title"></h2>
-              <p id="story-text"></p>
-              <blockquote id="story-boss" hidden></blockquote>
-              <p class="story-note" id="story-note" hidden></p>
-            </article>
-            <div id="chips"></div>
-            <div id="result" hidden>
-              <div class="result-bar">
-                <div class="tabs">
-                  <button type="button" data-tab="play" class="active">Jugar</button>
-                  <button type="button" data-tab="image">Imagen</button>
-                  <button type="button" data-tab="ascii">Mapa</button>
-                </div>
-                <span class="spacer"></span>
-                <button type="button" class="btn btn-ghost btn-sm" id="share" hidden>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
-                  <span id="share-label">Compartir</span>
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="edit-level" hidden>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-                  Editar
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="restart">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>
-                  Reiniciar (R)
-                </button>
-                <button type="button" class="btn btn-primary btn-sm" id="regen">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>
-                  Otra variante
-                </button>
-              </div>
-              <div class="panel" data-panel="play">
-                <div class="stage">
-                  <canvas id="game" tabindex="0"></canvas>
-                  <!-- Juegos escritos por la IA: aislados, sin acceso a la sesion ni a la red -->
-                  <iframe id="custom-frame" class="custom-frame" sandbox="allow-scripts" title="Juego creado a medida" hidden></iframe>
+            </div>
+
+            <!-- Modo juego: lienzo a la izquierda y panel con el titulo, los ajustes y las acciones a la derecha -->
+            <div class="play-layout" id="result" hidden>
+              <div class="play-main">
+                <div class="panel" data-panel="play">
+                  <div class="stage-box">
+                    <div class="stage">
+                      <canvas id="game" tabindex="0"></canvas>
+                      <!-- Juegos escritos por la IA: aislados, sin acceso a la sesion ni a la red -->
+                      <iframe id="custom-frame" class="custom-frame" sandbox="allow-scripts" title="Juego creado a medida" hidden></iframe>
+
+                      <!-- Inicio de partida: el nivel espera quieto a la primera tecla -->
+                      <div class="ready" id="ready" hidden>
+                        <div class="ready-card">
+                          <p class="ready-cta" id="ready-cta">Pulsa una flecha para empezar</p>
+                          <p class="ready-keys" id="ready-keys" aria-hidden="true"><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd></p>
+                          <p class="ready-controls" id="ready-controls"></p>
+                        </div>
+                      </div>
 
                   <!-- Pantalla de Game Over: aparece sobre el juego al perder -->
                   <div class="gameover" id="gameover" role="dialog" aria-modal="false" aria-labelledby="go-title" hidden>
@@ -1143,7 +1247,7 @@
                       <div class="go-actions">
                         <button type="button" class="btn btn-primary" id="go-retry">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>
-                          Reintentar <kbd>R</kbd>
+                          Jugar de nuevo <kbd>R</kbd>
                         </button>
                         <button type="button" class="btn" id="go-variant">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>
@@ -1189,14 +1293,61 @@
                       <button type="button" class="link-btn go-peek" id="vc-peek">Ver el nivel <kbd>Esc</kbd></button>
                     </div>
                   </div>
+                    </div>
+                  </div>
+                  <div class="touch-controls" id="touch-controls" hidden></div>
                 </div>
-                <div class="touch-controls" id="touch-controls" hidden></div>
-                <div id="hint"></div>
+                <div class="panel" data-panel="image" hidden><img id="image" alt="El nivel completo, visto desde arriba" /></div>
+                <div class="panel" data-panel="ascii" hidden><pre id="ascii"></pre></div>
               </div>
-              <div class="panel" data-panel="image" hidden><img id="image" alt="Mapa del nivel" /></div>
-              <div class="panel" data-panel="ascii" hidden><pre id="ascii"></pre></div>
+
+              <aside class="play-side" aria-label="Detalles del juego">
+                <div class="side-nav">
+                  <button type="button" class="btn btn-ghost btn-sm" id="back-level" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                    <span id="back-label">Anterior</span>
+                  </button>
+                  <span class="spacer"></span>
+                  <button type="button" class="icon-btn sm" id="close-game" aria-label="Cerrar el juego y volver al inicio" title="Cerrar juego"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                </div>
+                <article class="story" id="story" hidden>
+                  <div class="story-kicker"><span id="story-meta">Nivel generado</span><span class="source-chip" id="source-chip" hidden></span></div>
+                  <h2 id="story-title"></h2>
+                  <p id="story-text"></p>
+                  <blockquote id="story-boss" hidden></blockquote>
+                  <p class="story-note" id="story-note" hidden></p>
+                </article>
+                <p class="challenge" id="challenge" hidden></p>
+
+                <div class="side-block" id="settings-block">
+                  <h3>Ajustes</h3>
+                  <div id="chips"></div>
+                  <div class="chip-editor" id="chip-editor" hidden></div>
+                  <p class="side-note" id="chips-note">Toca un ajuste para cambiarlo. Se crea una variante y este juego no se pierde.</p>
+                </div>
+
+                <div class="side-block">
+                  <div class="tabs" role="tablist" aria-label="Vista">
+                    <button type="button" data-tab="play" class="active">Jugar</button>
+                    <button type="button" data-tab="image" title="El nivel completo, visto desde arriba">Ver nivel</button>
+                    <button type="button" data-tab="ascii" title="El nivel como texto, una letra por casilla">Texto</button>
+                  </div>
+                </div>
+
+                <div class="side-actions">
+                  <button type="button" class="btn btn-sm" id="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>Reiniciar <kbd>R</kbd></button>
+                  <button type="button" class="btn btn-sm" id="regen" title="Genera otro mapa con el mismo pedido. Este queda guardado en Mis juegos."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>Otra variante</button>
+                  <button type="button" class="btn btn-sm" id="share" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span id="share-label">Retar</span></button>
+                  <button type="button" class="btn btn-sm" id="edit-level" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar</button>
+                </div>
+                <div class="side-block">
+                  <h3>Controles</h3>
+                  <div id="hint"></div>
+                </div>
+              </aside>
             </div>
 
+            <div class="discover" id="discover">
             <div class="section-head">
               <h2 class="section-title">Destacados</h2>
               <div class="head-actions">
@@ -1207,6 +1358,7 @@
             <div class="featured" id="featured" aria-label="Ejemplos destacados"></div>
             <div class="section-head"><h2 class="section-title">Géneros</h2><a class="link-btn" href="#ejemplos">Ver todos los ejemplos</a></div>
             <div class="genres" data-genres></div>
+            </div>
           </section>
 
           <!-- ===== Mis juegos ===== -->
@@ -1217,6 +1369,12 @@
             <div class="toolbar">
               <div class="genres" data-genres></div>
               <div class="tool-right">
+                <label class="search" id="search-wrap">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <span class="sr-only">Buscar en mis juegos</span>
+                  <input id="search" type="search" placeholder="Buscar en mis juegos" autocomplete="off" />
+                  <kbd aria-hidden="true">/</kbd>
+                </label>
                 <label class="sr-only" for="sort">Ordenar</label>
                 <select class="select" id="sort">
                   <option value="recent">Más recientes</option>
