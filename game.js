@@ -227,6 +227,8 @@ window.LevelGame = { modes: {} };
     // Aspecto elegido por la IA o el parser; niveles antiguos sin "kinds" usan los sprites clasicos.
     const kinds = level.kinds || {};
     const itemSprite = SPRITE_DEFS[kinds.item] ? kinds.item : "coin";
+    // Lo que el usuario dijo que se recoge ("manzanas"): el aviso dice "Manzanas 3/18", no "Fruta 3/18".
+    const itemName = level.itemLabel ? level.itemLabel.charAt(0).toUpperCase() + level.itemLabel.slice(1) : null;
     const enemySprite = ENEMY_SPRITE[kinds.enemy] || (SPRITE_DEFS[kinds.enemy] ? kinds.enemy : "enemy");
     const bossSprite = BOSS_SPRITE[kinds.boss] || (SPRITE_DEFS[kinds.boss] ? kinds.boss : "boss");
 
@@ -404,7 +406,7 @@ window.LevelGame = { modes: {} };
         say("+1 vida", 0.9);
         return;
       }
-      if (!arcade) say((ITEM_LABEL[itemSprite] || "Objeto") + " " + state.collected + "/" + state.totalItems, 0.9);
+      if (!arcade) say((itemName || ITEM_LABEL[itemSprite] || "Objeto") + " " + state.collected + "/" + state.totalItems, 0.9);
     }
 
     function win() {
@@ -1635,7 +1637,12 @@ window.LevelGame = { modes: {} };
     const HANDLED = new Set([...Object.keys(DIRS), "Space"]);
     const DIRS_LOOKUP = (dir) => Object.keys(DIRS).find((code) => DIRS[code] === dir);
 
+    // Un nivel nuevo espera quieto a la primera tecla (o toque): asi el jugador ve el mapa y los controles.
+    let waiting = Boolean(options.waitStart);
+    const STARTERS = new Set([...Object.keys(DIRS), "Space", "Enter", "ShiftLeft", "ShiftRight"]);
+
     function handleDown(code) {
+      if (waiting && STARTERS.has(code)) waiting = false;
       keys.add(code);
       if (platformer) {
         if (["ArrowUp", "KeyW", "Space"].includes(code)) state.player.jumpBuf = 0.12;
@@ -1660,7 +1667,10 @@ window.LevelGame = { modes: {} };
     }
 
     function onKeyDown(event) {
-      if (event.target && /INPUT|TEXTAREA/.test(event.target.tagName)) return;
+      // Mientras se escribe en un campo, o si el juego no esta a la vista (otra seccion), el teclado no es suyo.
+      const target = event.target;
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+      if (!canvas.isConnected || canvas.offsetParent === null) return;
       if (HANDLED.has(event.code)) event.preventDefault();
       if (event.code === "KeyR" || (event.code === "Enter" && state.status !== "playing")) {
         reset();
@@ -1691,6 +1701,7 @@ window.LevelGame = { modes: {} };
 
     function onPointerDown(event) {
       event.preventDefault();
+      waiting = false;
       canvas.focus();
       // Seguir el dedo aunque salga del lienzo mientras arrastra.
       if (canvas.setPointerCapture && event.pointerId !== undefined) {
@@ -1714,7 +1725,7 @@ window.LevelGame = { modes: {} };
       const dt = Math.min(0.05, (now - lastFrame) / 1000 || 0);
       lastFrame = now;
       frameDt = dt;
-      update(dt);
+      if (!waiting) update(dt);
       render();
       rafId = requestAnimationFrame(frame);
     }
@@ -1772,6 +1783,10 @@ window.LevelGame = { modes: {} };
       },
       get state() {
         return state;
+      },
+      /** true hasta que el jugador pulsa la primera tecla de un nivel nuevo. */
+      get waiting() {
+        return waiting;
       },
       /** Ultimo aviso del juego (al perder explica el motivo); lo usa la pantalla de Game Over. */
       get message() {
